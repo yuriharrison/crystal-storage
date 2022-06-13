@@ -6,16 +6,16 @@ struct Tuple
   end
 end
 
-class IO::Memory::Memory
+class IO::Memory
   def slice(offet, size)
-    Memory.new @buffer[@pos + offet, size], writeable: @writeable
+    Memory.new to_slice[@pos + offet, size], writeable: @writeable
   end
 
   def slice
     slice 0, size - @pos
   end
 
-  def [](offet, size)
+  def [](offset, size)
     slice offset, size
   end
 end
@@ -49,12 +49,6 @@ module CryStorage::PageManagement
     abstract def unsafe_fetch(index : SlotID) : IPageSlot
 
     abstract def unsafe_put(index : SlotID, slot : IPageSlot)
-    
-    abstract def add(item : IPageSlot) : SlotID
-
-    def <<(item : IPageSlot) : SlotID
-      add item
-    end
 
     def flush
       @manager[@id] = self
@@ -90,6 +84,10 @@ module CryStorage::PageManagement
 
     def initialize(io : IO::Memory)
       @data = Array(Int64).new 3 { io.read_bytes Int64 }
+    end
+
+    def randomize
+      @data = @data.map { |i| rand(Int64) }
     end
 
     def flush
@@ -146,23 +144,23 @@ module CryStorage::PageManagement
     def to_io(io : IO::Memory)
     end
 
-    def size : Int
+    def size
       @header.size
     end
 
-    private def slot_link(slot_id : Int64)
-      io = slot_slice slot_id
-      {io.read_bytes Int64, io.read_bytes Int64} 
+    private def slot_link(slot_id)
+      io = slot_link_slice slot_id
+      {io.read_bytes(Int64), io.read_bytes(Int64)} 
     end
 
-    private def slot_link_slice(slot_id : Int64)
-      @body[SLOT_LINK_SIZE*(slot_id - 1), SLOT_LINK_SIZE]
+    private def slot_link_slice(slot_id)
+      @body[SLOT_LINK_SIZE*slot_id, SLOT_LINK_SIZE]
     end
     
     def unsafe_fetch(slot_id : Int) : IPageSlot
       offset, content_size = slot_link slot_id
       body_offset = BODY_SIZE - offset - content_size
-      PageSlot.new self, slot_id, @body.slice(body_offset, content_size)
+      PageSlot.new self, slot_id.to_i64, @body.slice(body_offset, content_size)
     end
 
     def unsafe_put(slot_id : Int, slot : IPageSlot)
@@ -173,8 +171,8 @@ module CryStorage::PageManagement
 
     def new_slot : IPageSlot
       # check table has space
-      @head.size += 1
-      slot_id = @head.size
+      slot_id = @header.size
+      @header.size += 1
       offset = slot_id*PageSlot::SIZE
       size = PageSlot::SIZE
       {offset, size}.to_io slot_link_slice slot_id
@@ -200,7 +198,7 @@ module CryStorage::PageManagement
     end
 
     def unsafe_fetch(index : PageID) : IPage
-      Page.new self, index, IO::Memory::Memory.new Slice.new(@page_size, UInt8::MIN)
+      Page.new self, index, IO::Memory.new Slice.new(@page_size, UInt8::MIN)
     end
   
     def unsafe_put(index : Int, page : IPage)

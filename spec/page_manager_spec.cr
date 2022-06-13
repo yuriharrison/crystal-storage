@@ -9,6 +9,14 @@ describe PageManager do
     page = page_manager[page_id]
     puts page.id
 
+    slot = page.new_slot
+    slot.randomize
+
+    slot.flush
+    slot = page[0]
+    pp! slot.address
+
+
     # slot = PageSlot.new page, 1
     # puts slot
     # io = IO::Memory.new
