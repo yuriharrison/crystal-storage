@@ -1,5 +1,3 @@
-require "./serializers"
-
 struct Tuple
   def to_io(io : IO)
     each { |n| io.write_bytes n }
@@ -7,7 +5,7 @@ struct Tuple
 end
 
 class IO::Memory
-  def slice(offet, size)
+  def slice(offet, size) : Memory
     Memory.new to_slice[@pos + offet, size], writeable: @writeable
   end
 
@@ -30,9 +28,8 @@ module Indexable::Item(T)
 end
 
 module CryStorage::PageManagement
-  alias PageID = Int64
-  alias SlotID = Int64
-  alias Address = Tuple(PageID, SlotID)
+  alias Index = Int64
+  alias Address = Tuple(Index, Index)
   alias Link = Tuple(Int64, Int64)
 
   INT_SIZE = sizeof(Int64)
@@ -41,38 +38,51 @@ module CryStorage::PageManagement
   end
 
   abstract struct IPage
+  end
+
+  abstract struct IManager
+    include Indexable::Mutable(IPage)
+  end
+
+  abstract struct IPage
     include Indexable::Mutable(ISlot)
     include Indexable::Item(IPage)
+
+    abstract def initialize(@manager : IManager, @id : Index, buffer : IO::Memory)
+
+    def indexer : IManager
+      @manager
+    end
+
+    def index : Index
+      @id
+    end
   end
 
   abstract struct ISlot
     include Indexable::Item(ISlot)
+    
+    abstract def initialize(@page : IPage, @id : Index, io : IO::Memory)
 
-    abstract def indexer : IPage
+    def index : Index
+      @id
+    end
+
+    def indexer : IPage
+      @page
+    end
 
     def address : Address
       { indexer.index, index }
     end
   end
-
-  abstract struct IPageManager
-    include Indexable::Mutable(IPage)
-  end
   
-  struct PageSlot < ISlot
+  struct Slot < ISlot
     SIZE = INT_SIZE*3
     @page = uninitialized Page
     @id = uninitialized Int64
 
-    def initialize(@page : IPage, @id : SlotID)
-      @data = Array(Int64).new 3 { Int64::MIN }
-    end
-
-    def initialize(@page : IPage, @id : SlotID, io : IO::Memory)
-      initialize io
-    end
-
-    def initialize(io : IO::Memory)
+    def initialize(@page : IPage, @id : Index, io : IO::Memory)
       @data = Array(Int64).new 3 { io.read_bytes Int64 }
     end
 
@@ -84,13 +94,12 @@ module CryStorage::PageManagement
       @page[@id] = self
     end
 
-    def to_io(io : IO::Memory)
+    def to_io(io, format)
       @data.each { |i| io.write_bytes i }
     end
   end
   
   struct PageHeader
-    include Serializers::IOSerializable
     SIZE = INT_SIZE*2
 
     property version
@@ -103,7 +112,7 @@ module CryStorage::PageManagement
       initialize io.read_bytes(Int64), io.read_bytes(Int64)
     end
     
-    def to_io(io : IO::Memory)
+    def to_io(io, format)
       io.write_bytes @version
       io.write_bytes @size
     end
@@ -115,31 +124,17 @@ module CryStorage::PageManagement
     HEADER_SIZE =  PageHeader::SIZE
     BODY_SIZE =  SIZE - HEADER_SIZE
     SLOT_LINK_SIZE = INT_SIZE*2
-    @header : PageHeader
-    @body : Bytes
-    @manager = uninitialized IPageManager
-    @id = uninitialized PageID
-    @header = uninitialized PageHeader
-    @body = uninitialized IO::Memory
 
-    def initialize(@manager, @id, buffer)
-      initialize buffer
-    end
-
-    def initialize(buffer : IO::Memory)
+    @body : IO::Memory
+    def initialize(@manager : IManager, @id : Index, buffer : IO::Memory)
       @header = PageHeader.new buffer
       @body = buffer.slice
     end
 
-    def indexer
-      @manager
+    def from_io(io, format)
     end
 
-    def index
-      @id
-    end
-
-    def to_io(io : IO::Memory)
+    def to_io(io, format)
     end
 
     def size
@@ -155,34 +150,34 @@ module CryStorage::PageManagement
       @body[SLOT_LINK_SIZE*slot_id, SLOT_LINK_SIZE]
     end
     
-    def unsafe_fetch(slot_id : Int) : IPageSlot
+    def unsafe_fetch(slot_id : Int) : ISlot
       offset, content_size = slot_link slot_id
       body_offset = BODY_SIZE - offset - content_size
-      PageSlot.new self, slot_id.to_i64, @body.slice(body_offset, content_size)
+      Slot.new self, slot_id.to_i64, @body.slice(body_offset, content_size)
     end
 
-    def unsafe_put(slot_id : Int, slot : IPageSlot)
+    def unsafe_put(slot_id : Int, slot : ISlot)
       offset, content_size = slot_link slot_id
       body_offset = BODY_SIZE - offset - content_size
       @body[body_offset, content_size].write_bytes slot
     end
 
-    def new_slot : IPageSlot
+    def new_slot : ISlot
       # check table has space
       slot_id = @header.size
       @header.size += 1
-      offset = slot_id*PageSlot::SIZE
-      size = PageSlot::SIZE
+      offset = slot_id*Slot::SIZE
+      size = Slot::SIZE
       {offset, size}.to_io slot_link_slice slot_id
       unsafe_fetch slot_id
     end
 
   end
 
-  struct PageManager < IPageManager
+  struct MemoryManager < IManager
     @page_size = 4096
     
-    def initialize()
+    def initialize
     end
 
     def size : Int
@@ -193,7 +188,7 @@ module CryStorage::PageManagement
       unsafe_fetch index.to_i64
     end
 
-    def unsafe_fetch(index : PageID) : IPage
+    def unsafe_fetch(index : Index) : IPage
       Page.new self, index, IO::Memory.new Slice.new(@page_size, UInt8::MIN)
     end
   

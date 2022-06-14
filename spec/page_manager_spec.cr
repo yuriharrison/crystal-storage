@@ -2,12 +2,12 @@ require "./spec_helper"
 
 include PageManagement
 
-describe PageManager do
+describe MemoryManager do
   it "#test" do
     page_id = 0
-    page_manager = PageManager.new
+    page_manager = MemoryManager.new
     page = page_manager[page_id]
-    puts page.id
+    puts page.index
 
     slot = page.new_slot
     slot.randomize
