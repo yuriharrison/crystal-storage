@@ -20,6 +20,15 @@ class IO::Memory
   end
 end
 
+module Indexable::Item(T)
+  abstract def index : Int
+  abstract def indexer : Indexable::Mutable(T)
+
+  def flush
+    indexer[index] = self
+  end
+end
+
 module CryStorage::PageManagement
   alias PageID = Int64
   alias SlotID = Int64
@@ -27,49 +36,30 @@ module CryStorage::PageManagement
   alias Link = Tuple(Int64, Int64)
 
   INT_SIZE = sizeof(Int64)
+  
+  abstract struct ISlot
+  end
 
-  abstract struct IPageSlot
-    include Serializers::IOSerializable
+  abstract struct IPage
+    include Indexable::Mutable(ISlot)
+    include Indexable::Item(IPage)
+  end
 
-    abstract def initialize(@page : IPage, @id : SlotID, io : IO::Memory)
+  abstract struct ISlot
+    include Indexable::Item(ISlot)
+
+    abstract def indexer : IPage
 
     def address : Address
-      { @page.id, @id }
+      { indexer.index, index }
     end
   end
 
-  abstract class IPage
-    include Indexable::Mutable(IPageSlot)
-    include Serializers::IOSerializable
-
-    getter id
-
-    abstract def initialize(@manager : IPageManager, @id : PageID, @buffer : IO::Memory)
-
-    abstract def unsafe_fetch(index : SlotID) : IPageSlot
-
-    abstract def unsafe_put(index : SlotID, slot : IPageSlot)
-
-    def flush
-      @manager[@id] = self
-    end
-
-    def byte_size : Int
-      @buffer.size
-    end
-  end
-
-  abstract class IPageManager
+  abstract struct IPageManager
     include Indexable::Mutable(IPage)
-
-    abstract def unsafe_fetch(index : PageID) : IPage
-
-    abstract def unsafe_put(index : PageID, page : IPage)
-
-    abstract def size : Int
   end
   
-  struct PageSlot < IPageSlot
+  struct PageSlot < ISlot
     SIZE = INT_SIZE*3
     @page = uninitialized Page
     @id = uninitialized Int64
@@ -119,7 +109,7 @@ module CryStorage::PageManagement
     end
   end
 
-  class Page < IPage
+  struct Page < IPage
     INT_SIZE = sizeof(Int64)
     SIZE = 1024
     HEADER_SIZE =  PageHeader::SIZE
@@ -139,6 +129,14 @@ module CryStorage::PageManagement
     def initialize(buffer : IO::Memory)
       @header = PageHeader.new buffer
       @body = buffer.slice
+    end
+
+    def indexer
+      @manager
+    end
+
+    def index
+      @id
     end
 
     def to_io(io : IO::Memory)
@@ -181,12 +179,10 @@ module CryStorage::PageManagement
 
   end
 
-  class PageManager < IPageManager
+  struct PageManager < IPageManager
     @page_size = 4096
     
-    def initialize
-      # @file = File.open("./db", "r+b")
-      # @file.seek()
+    def initialize()
     end
 
     def size : Int

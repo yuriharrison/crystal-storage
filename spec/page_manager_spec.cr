@@ -15,14 +15,5 @@ describe PageManager do
     slot.flush
     slot = page[0]
     pp! slot.address
-
-
-    # slot = PageSlot.new page, 1
-    # puts slot
-    # io = IO::Memory.new
-    # slot.to_io io
-    # io.rewind
-    # slot = PageSlot.new page, 1, io
-    # puts slot
   end
 end
