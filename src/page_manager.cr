@@ -41,7 +41,7 @@ module CryStorage::PageManagement
   end
 
   abstract struct IManager
-    include Indexable::Mutable(IPage)
+    include Indexable::Mutable(IO::Memory)
   end
 
   abstract struct IPage
@@ -175,25 +175,27 @@ module CryStorage::PageManagement
   end
 
   struct MemoryManager < IManager
-    @page_size = 4096
+    MIN_SIZE = 4
+    PAGE_SIZE = 4096
     
     def initialize
+      @buffer = IO::Memory.new PAGE_SIZE*MIN_SIZE
     end
 
     def size : Int
-      10
+      (@buffer.size / PAGE_SIZE).to_i64
     end
 
-    def unsafe_fetch(index : Int) : IPage
+    def unsafe_fetch(index : Int) : IO::Memory
       unsafe_fetch index.to_i64
     end
 
-    def unsafe_fetch(index : Index) : IPage
-      Page.new self, index, IO::Memory.new Slice.new(@page_size, UInt8::MIN)
+    def unsafe_fetch(index : Index) : IO::Memory
+      @buffer[index*PAGE_SIZE, PAGE_SIZE]
     end
   
-    def unsafe_put(index : Int, page : IPage)
-
+    def unsafe_put(index : Int, io : IO::Memory)
+      
     end
   end
 end
