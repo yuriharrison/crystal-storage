@@ -5,6 +5,17 @@ struct Tuple
 end
 
 class IO::Memory
+  def copy(io : IO)
+    IO.copy self, io
+    io
+  end
+
+  def copy_from(io : IO)
+    io.copy self
+  end
+end
+
+class IO::Memory
   def slice(offet, size) : Memory
     Memory.new to_slice[@pos + offet, size], writeable: @writeable
   end
@@ -15,6 +26,11 @@ class IO::Memory
 
   def [](offset, size)
     slice offset, size
+  end
+
+  def copy
+    io = IO::Memory.new
+    copy io
   end
 end
 
@@ -46,9 +62,9 @@ module CryStorage::PageManagement
 
   abstract struct IPage
     include Indexable::Mutable(ISlot)
-    include Indexable::Item(IPage)
+    include Indexable::Item(IO::Memory)
 
-    abstract def initialize(@manager : IManager, @id : Index, buffer : IO::Memory)
+    abstract def initialize(@manager : IManager, @id : Index, @buffer : IO::Memory)
 
     def indexer : IManager
       @manager
@@ -97,6 +113,10 @@ module CryStorage::PageManagement
     def to_io(io, format)
       @data.each { |i| io.write_bytes i }
     end
+
+    def to_s
+      return @data.to_s
+    end
   end
   
   struct PageHeader
@@ -126,7 +146,8 @@ module CryStorage::PageManagement
     SLOT_LINK_SIZE = INT_SIZE*2
 
     @body : IO::Memory
-    def initialize(@manager : IManager, @id : Index, buffer : IO::Memory)
+
+    def initialize(@manager : IManager, @id : Index, @buffer : IO::Memory)
       @header = PageHeader.new buffer
       @body = buffer.slice
     end
@@ -135,6 +156,8 @@ module CryStorage::PageManagement
     end
 
     def to_io(io, format)
+      io.write_bytes @header
+      io.copy_from @body
     end
 
     def size
@@ -172,14 +195,17 @@ module CryStorage::PageManagement
       unsafe_fetch slot_id
     end
 
+    def to_s
+      @header.to_s
+    end
   end
 
   struct MemoryManager < IManager
     MIN_SIZE = 4
-    PAGE_SIZE = 4096
+    PAGE_SIZE = 1024
     
     def initialize
-      @buffer = IO::Memory.new PAGE_SIZE*MIN_SIZE
+      @buffer = IO::Memory.new Slice.new PAGE_SIZE*MIN_SIZE, UInt8::MIN
     end
 
     def size : Int
@@ -190,12 +216,25 @@ module CryStorage::PageManagement
       unsafe_fetch index.to_i64
     end
 
-    def unsafe_fetch(index : Index) : IO::Memory
+    def unsafe_fetch(index : Int64) : IO::Memory
       @buffer[index*PAGE_SIZE, PAGE_SIZE]
     end
-  
+    
     def unsafe_put(index : Int, io : IO::Memory)
-      
+      unsafe_fetch(index).write io.to_slice
+    end
+    
+    def [](index : Int) : IO::Memory
+      puts "copying"
+      @buffer[index*PAGE_SIZE, PAGE_SIZE].copy.rewind
+    end
+
+    def []=(index : Int, page : IPage)
+      unsafe_fetch(index).write_bytes page
+    end
+
+    def []=(index : Int, page : IPage)
+      unsafe_fetch(index).write_bytes page
     end
   end
 end

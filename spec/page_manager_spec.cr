@@ -6,7 +6,7 @@ describe MemoryManager do
   it "#test" do
     page_id = 0
     page_manager = MemoryManager.new
-    page = page_manager[page_id]
+    page = Page.new page_manager, page_id, page_manager[page_id]
     puts page.index
 
     slot = page.new_slot
@@ -15,5 +15,15 @@ describe MemoryManager do
     slot.flush
     slot = page[0]
     pp! slot.address
+    pp! slot.to_s
+    puts page.to_s
+    page_manager[page_id] = page
+
+    page = Page.new page_manager, page_id, page_manager[page_id]
+    puts page.to_s
+    slot = page[0]
+    pp! slot.address
+    pp! slot.to_s
+
   end
 end
