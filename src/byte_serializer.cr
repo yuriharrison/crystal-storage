@@ -1,11 +1,13 @@
 class String
   def self.from_io(io : IO)
-    io.read_string io.write_bytes Int32
+    io.read_string io.read_bytes Int32
   end
 
   def to_io(io : IO)
     io.write_bytes bytesize
-    io.write_bytes bytes
+    bytes.each do |byte|
+      io.write_byte byte
+    end
     io
   end
 end
