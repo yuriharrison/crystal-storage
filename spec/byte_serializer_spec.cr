@@ -6,6 +6,14 @@ def rand_string(size)
 end
 
 
+def test_to_from_io(value)
+  IO::Memory.new
+    .write_bytes(value)
+    .rewind
+    .read_bytes(typeof(value))
+    .tap { should eq value }
+end
+
 module TestModule(T)
   getter name
   getter age
@@ -50,42 +58,31 @@ end
 
 
 describe Serializable do
+  it "Boolean #to_io #from_io" do
+    test_to_from_io true
+    test_to_from_io false
+  end
+
   it "String #to_io #from_io" do
-    value = "test"
-    io = IO::Memory.new
-    value.to_io io
-    String.from_io(io.rewind).should eq value
+    test_to_from_io rand_string(10)
   end
 
   it "Array(Float) #to_io #from_io" do
     array = Array(Float32).new 10 { rand(Float32::MAX) }
-    io = IO::Memory.new
-    array.to_io io
-    Array(Float32).from_io(io.rewind).should eq array
+    test_to_from_io array
   end
-
+  
   it "Array(String) #to_io #from_io" do
     array = Array(String).new 10 { rand_string 100 }
-    io = IO::Memory.new
-    array.to_io io
-    Array(String).from_io(io.rewind).should eq array
+    test_to_from_io array
   end
 
   it "Struct TestStruct #to_io #from_io" do
-    value = TestStruct.gen_random
-    io = IO::Memory.new
-    value.to_io io
-    value_from = TestStruct.from_io(io.rewind)
-    value_from.should eq value
-    value_from.non_serializable_field.should be_falsey
+    test_to_from_io TestStruct.gen_random
   end
 
   it "Class TestClass #to_io #from_io" do
-    value = TestClass.gen_random
-    io = IO::Memory.new
-    value.to_io io
-    value_from = TestClass.from_io(io.rewind)
-    value_from.should eq value
-    value_from.non_serializable_field.should be_falsey
+    value = test_to_from_io TestClass.gen_random
+    value.non_serializable_field.should be_falsey
   end
 end

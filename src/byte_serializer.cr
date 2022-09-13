@@ -1,3 +1,27 @@
+abstract class IO
+  def write_bytes(object, format : IO::ByteFormat = IO::ByteFormat::SystemEndian) : IO
+    object.to_io(self, format)
+    self
+  end
+end
+
+class Object
+  def tap
+    with self yield self
+    self
+  end
+end
+
+struct Bool
+  def self.from_io(io : IO, format=nil)
+    io.read_bytes(LibC::Int).unsafe_as(Bool)
+  end
+
+  def to_io(io : IO, format=nil)
+    io.write_bytes to_unsafe
+  end
+end
+
 class Array(T)
   def self.from_io(io : IO, format=nil)
     Array.new io.read_bytes(Int32) do
