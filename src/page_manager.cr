@@ -99,7 +99,7 @@ module CryStorage::PageManagement
     @id = uninitialized Int64
 
     def initialize(@page : IPage, @id : Index, io : IO::Memory)
-      @data = Array(Int64).new 3 { io.read_bytes Int64 }
+      @data = Array(Int64).read_bytes io
     end
 
     def randomize
@@ -111,11 +111,12 @@ module CryStorage::PageManagement
     end
 
     def to_io(io, format)
+      io.write_bytes = @data
       @data.each { |i| io.write_bytes i }
     end
 
     def to_s
-      return @data.to_s
+      return "#{@data.to_s} #{}"
     end
   end
   
