@@ -228,7 +228,6 @@ module CryStorage::PageManagement
     end
     
     def [](index : Int) : IO::Memory
-      puts "copying"
       @buffer[index*PAGE_SIZE, PAGE_SIZE].copy.rewind
     end
 

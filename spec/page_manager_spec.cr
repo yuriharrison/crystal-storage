@@ -7,24 +7,20 @@ describe MemoryManager do
     page_id = 0.to_i64
     page_manager = MemoryManager.new
     page = Page.new page_manager, page_id, page_manager[page_id]
-    puts page.index
+    # puts page.index
 
     slot = page.new_slot
     slot.randomize
     pp! slot.to_s
 
     slot.flush
-    slot = page[0]
-    pp! slot.address
-    pp! slot.to_s
-    puts page.to_s
+    slot_a = page[0]
     page_manager[page_id] = page
     
     page = Page.new page_manager, page_id, page_manager[page_id]
-    puts page.to_s
-    slot = page[0]
-    pp! slot.address
-    pp! slot.to_s
-
+    slot_b = page[0]
+    slot_b.address.should eq slot_a.address
+    slot_b.to_s.should eq slot_a.to_s
+    
   end
 end
