@@ -94,16 +94,17 @@ module CryStorage::PageManagement
   end
   
   struct Slot < ISlot
-    SIZE = INT_SIZE*3
+    SIZE = INT_SIZE*4
+    @data : Array(Int64)
     @page = uninitialized Page
     @id = uninitialized Int64
 
     def initialize(@page : IPage, @id : Index, io : IO::Memory)
-      @data = Array(Int64).read_bytes io
+      @data = Array(Int64).from_io io
     end
 
     def randomize
-      @data = @data.map { |i| rand(Int64) }
+      @data = Array(Int64).new 3 { rand(Int64) }
     end
 
     def flush
@@ -111,12 +112,11 @@ module CryStorage::PageManagement
     end
 
     def to_io(io, format)
-      io.write_bytes = @data
-      @data.each { |i| io.write_bytes i }
+      io.write_bytes @data
     end
 
     def to_s
-      return "#{@data.to_s} #{}"
+      return "#{@data}"
     end
   end
   
@@ -183,11 +183,13 @@ module CryStorage::PageManagement
     def unsafe_put(slot_id : Int, slot : ISlot)
       offset, content_size = slot_link slot_id
       body_offset = BODY_SIZE - offset - content_size
+      # TODO: slot should return size
+      # TODO: execute overflow 
       @body[body_offset, content_size].write_bytes slot
     end
 
     def new_slot : ISlot
-      # check table has space
+      # TODO: check page has space
       slot_id = @header.size
       @header.size += 1
       offset = slot_id*Slot::SIZE

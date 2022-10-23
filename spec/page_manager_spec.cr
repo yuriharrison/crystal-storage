@@ -11,6 +11,7 @@ describe MemoryManager do
 
     slot = page.new_slot
     slot.randomize
+    pp! slot.to_s
 
     slot.flush
     slot = page[0]
@@ -18,7 +19,7 @@ describe MemoryManager do
     pp! slot.to_s
     puts page.to_s
     page_manager[page_id] = page
-
+    
     page = Page.new page_manager, page_id, page_manager[page_id]
     puts page.to_s
     slot = page[0]
