@@ -7,7 +7,6 @@ describe MemoryManager do
     page_id = 0.to_i64
     page_manager = MemoryManager.new
     page = Page.new page_manager, page_id, page_manager[page_id]
-    # puts page.index
 
     slot = page.new_slot
     slot.randomize

@@ -50,17 +50,17 @@ module CryStorage::PageManagement
 
   INT_SIZE = sizeof(Int64)
   
-  abstract struct ISlot
+  abstract class ISlot
   end
 
-  abstract struct IPage
+  abstract class IPage
   end
 
-  abstract struct IManager
+  abstract class IManager
     include Indexable::Mutable(IO::Memory)
   end
 
-  abstract struct IPage
+  abstract class IPage
     include Indexable::Mutable(ISlot)
     include Indexable::Item(IO::Memory)
 
@@ -75,7 +75,7 @@ module CryStorage::PageManagement
     end
   end
 
-  abstract struct ISlot
+  abstract class ISlot
     include Indexable::Item(ISlot)
     
     abstract def initialize(@page : IPage, @id : Index, io : IO::Memory)
@@ -93,8 +93,9 @@ module CryStorage::PageManagement
     end
   end
   
-  struct Slot < ISlot
-    SIZE = INT_SIZE*4
+  class Slot < ISlot
+    HEAD_SIZE = INT_SIZE*4
+    MIN_SIZE = HEAD_SIZE
     @data : Array(Int64)
     @page = uninitialized Page
     @id = uninitialized Int64
@@ -116,11 +117,11 @@ module CryStorage::PageManagement
     end
 
     def to_s
-      return "#{@data}"
+      return "#{@data} Page #{@page.size}"
     end
   end
   
-  struct PageHeader
+  class PageHeader
     SIZE = INT_SIZE*2
 
     property version
@@ -139,7 +140,7 @@ module CryStorage::PageManagement
     end
   end
 
-  struct Page < IPage
+  class Page < IPage
     INT_SIZE = sizeof(Int64)
     SIZE = 1024
     HEADER_SIZE =  PageHeader::SIZE
@@ -188,14 +189,30 @@ module CryStorage::PageManagement
       @body[body_offset, content_size].write_bytes slot
     end
 
+    private def space_left : Int32
+      BODY_SIZE - size*SLOT_LINK_SIZE
+    end
+
+    def full? : Bool
+      Slot::HEAD_SIZE && space_left
+    end
+    
+    private def next_offset(next_slot_size : Int32)
+      offset, content_size = slot_link(size)
+      offset + content_size
+    end
+
     def new_slot : ISlot
       # TODO: check page has space
       slot_id = @header.size
-      @header.size += 1
-      offset = slot_id*Slot::SIZE
-      size = Slot::SIZE
+      offset = next_offset Slot::MIN_SIZE
+      size = Slot::MIN_SIZE
       {offset, size}.to_io slot_link_slice slot_id
-      unsafe_fetch slot_id
+      unsafe_fetch(slot_id).tap { increase_slot_count }
+    end
+
+    private def increase_slot_count
+      @header.size += 1
     end
 
     def to_s
@@ -203,7 +220,7 @@ module CryStorage::PageManagement
     end
   end
 
-  struct MemoryManager < IManager
+  class MemoryManager < IManager
     MIN_SIZE = 4
     PAGE_SIZE = 1024
     
