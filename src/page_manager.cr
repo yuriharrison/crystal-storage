@@ -1,57 +1,12 @@
-struct Tuple
-  def to_io(io : IO)
-    each { |n| io.write_bytes n }
-  end
-end
-
-class IO::Memory
-  def copy(io : IO)
-    IO.copy self, io
-    io
-  end
-
-  def copy_from(io : IO)
-    io.copy self
-  end
-end
-
-class IO::Memory
-  def slice(offet, size) : Memory
-    Memory.new to_slice[@pos + offet, size], writeable: @writeable
-  end
-
-  def slice
-    slice 0, size - @pos
-  end
-
-  def [](offset, size)
-    slice offset, size
-  end
-
-  def copy
-    io = IO::Memory.new
-    copy io
-  end
-end
-
-module Indexable::Item(T)
-  abstract def index : Int
-  abstract def indexer : Indexable::Mutable(T)
-
-  def flush
-    indexer[index] = self
-  end
-end
+require "./utils"
+require "./slot"
 
 module CryStorage::PageManagement
   alias Index = Int64
   alias Address = Tuple(Index, Index)
   alias Link = Tuple(Int64, Int64)
 
-  INT_SIZE = sizeof(Int64)
-  
-  abstract class ISlot
-  end
+  INT_SIZE = sizeof(Int64).to_i64
 
   abstract class IPage
   end
@@ -74,54 +29,8 @@ module CryStorage::PageManagement
       @id
     end
   end
-
-  abstract class ISlot
-    include Indexable::Item(ISlot)
-    
-    abstract def initialize(@page : IPage, @id : Index, io : IO::Memory)
-
-    def index : Index
-      @id
-    end
-
-    def indexer : IPage
-      @page
-    end
-
-    def address : Address
-      { indexer.index, index }
-    end
-  end
   
-  class Slot < ISlot
-    HEAD_SIZE = INT_SIZE*4
-    MIN_SIZE = HEAD_SIZE
-    @data : Array(Int64)
-    @page = uninitialized Page
-    @id = uninitialized Int64
-
-    def initialize(@page : IPage, @id : Index, io : IO::Memory)
-      @data = Array(Int64).from_io io
-    end
-
-    def randomize
-      @data = Array(Int64).new 3 { rand(Int64) }
-    end
-
-    def flush
-      @page[@id] = self
-    end
-
-    def to_io(io, format)
-      io.write_bytes @data
-    end
-
-    def to_s
-      return "#{@data} Page #{@page.size}"
-    end
-  end
-  
-  class PageHeader
+  struct PageHeader
     SIZE = INT_SIZE*2
 
     property version
@@ -140,11 +49,15 @@ module CryStorage::PageManagement
     end
   end
 
-  class Page < IPage
-    INT_SIZE = sizeof(Int64)
-    SIZE = 1024
-    HEADER_SIZE =  PageHeader::SIZE
-    BODY_SIZE =  SIZE - HEADER_SIZE
+  class Page(T) < IPage
+    # TODO: implement slot index
+    # TODO: implement slot table
+    # TODO: implement transactions
+    # TODO: make write operations thread-safe
+
+    BYTE_SIZE = 1024_i64
+    HEADER_SIZE = PageHeader::SIZE
+    BODY_SIZE = BYTE_SIZE - HEADER_SIZE
     SLOT_LINK_SIZE = INT_SIZE*2
 
     @body : IO::Memory
@@ -165,6 +78,84 @@ module CryStorage::PageManagement
     def size
       @header.size
     end
+    
+    def unsafe_fetch(slot_id : Int) : ISlot
+      offset, content_size = slot_link slot_id
+      T.new self, slot_id.to_i64, @body[offset, content_size]
+    end
+
+    def []=(slot_id : Int, slot : ISlot)
+      not_full! slot
+      unsafe_put slot_id, slot
+    end
+
+    def unsafe_put(slot_id : Int, slot : ISlot)
+      offset, previous_size = slot_link slot_id
+      offset = next_offset slot.byte_size if previous_size < slot.byte_size
+      slot_link_slice(slot_id).write_bytes({ offset, slot.byte_size })
+      @body[offset, slot.byte_size].write_bytes slot
+    end
+    
+    def push(slot : ISlot)
+      not_full! slot.byte_size
+      unsafe_push slot
+    end
+
+    def unsafe_push(slot : ISlot)
+      slot.id = new_index
+      slot.page = self
+      unsafe_put(slot.id!, slot).tap { increase_slot_count }
+    end
+    
+    def slot_cost(slot_byte_size)
+      SLOT_LINK_SIZE + slot_byte_size
+    end
+
+    def full?(slot_byte_size)
+      space_left < slot_cost slot_byte_size
+    end
+
+    def full?(slot : ISlot)
+      if slot.page == self
+        offset, previous_size = slot_link slot.id!
+        return false if slot.byte_size <= previous_size
+      end
+      full? slot.byte_size
+    end
+    
+    def last_index
+      size - 1
+    end
+
+    def not_full!(slot_byte_size)
+      raise "Page is full" if full? slot_byte_size
+    end
+
+    def to_s
+      @header.to_s
+    end
+
+    private def space_left
+      # BODY[ ...next_slot_link <SPACE_LEFT> next_slot_offset... ]
+      next_offset(0) - size*SLOT_LINK_SIZE
+    end
+
+    private def next_offset(next_slot_size)
+      if last_index < 0
+        previous_offset = BODY_SIZE
+      else
+        previous_offset, _ = slot_link(last_index)
+      end
+      previous_offset - next_slot_size
+    end
+
+    private def new_index
+      size
+    end
+
+    private def increase_slot_count
+      @header.size += 1
+    end
 
     private def slot_link(slot_id)
       io = slot_link_slice slot_id
@@ -173,50 +164,6 @@ module CryStorage::PageManagement
 
     private def slot_link_slice(slot_id)
       @body[SLOT_LINK_SIZE*slot_id, SLOT_LINK_SIZE]
-    end
-    
-    def unsafe_fetch(slot_id : Int) : ISlot
-      offset, content_size = slot_link slot_id
-      body_offset = BODY_SIZE - offset - content_size
-      Slot.new self, slot_id.to_i64, @body.slice(body_offset, content_size)
-    end
-
-    def unsafe_put(slot_id : Int, slot : ISlot)
-      offset, content_size = slot_link slot_id
-      body_offset = BODY_SIZE - offset - content_size
-      # TODO: slot should return size
-      # TODO: execute overflow 
-      @body[body_offset, content_size].write_bytes slot
-    end
-
-    private def space_left : Int32
-      BODY_SIZE - size*SLOT_LINK_SIZE
-    end
-
-    def full? : Bool
-      Slot::HEAD_SIZE && space_left
-    end
-    
-    private def next_offset(next_slot_size : Int32)
-      offset, content_size = slot_link(size)
-      offset + content_size
-    end
-
-    def new_slot : ISlot
-      # TODO: check page has space
-      slot_id = @header.size
-      offset = next_offset Slot::MIN_SIZE
-      size = Slot::MIN_SIZE
-      {offset, size}.to_io slot_link_slice slot_id
-      unsafe_fetch(slot_id).tap { increase_slot_count }
-    end
-
-    private def increase_slot_count
-      @header.size += 1
-    end
-
-    def to_s
-      @header.to_s
     end
   end
 

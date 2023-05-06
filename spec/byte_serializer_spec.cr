@@ -56,33 +56,55 @@ class TestClass
   include TestModule(TestClass)
 end
 
+enum TestEnum; One; Two end
 
 describe Serializable do
-  it "Boolean #to_io #from_io" do
-    test_to_from_io true
-    test_to_from_io false
+  describe Bool do
+    it "#to_io #from_io" do
+      test_to_from_io true
+      test_to_from_io false
+    end
   end
 
-  it "String #to_io #from_io" do
-    test_to_from_io rand_string(10)
+  describe Enum do
+    it "#to_io #from_io" do
+      test_to_from_io TestEnum::One
+      test_to_from_io TestEnum::Two
+    end
   end
 
-  it "Array(Float) #to_io #from_io" do
-    array = Array(Float32).new 10 { rand(Float32::MAX) }
-    test_to_from_io array
+    describe String do
+    it "#to_io #from_io" do
+      test_to_from_io rand_string(10)
+    end
+  end
+
+  describe Array do
+    it "#to_io #from_io" do
+      array = Array(Float32).new 10 { rand(Float32::MAX) }
+      test_to_from_io array
+    end
   end
   
-  it "Array(String) #to_io #from_io" do
-    array = Array(String).new 10 { rand_string 100 }
-    test_to_from_io array
+  describe Array do
+    it "#to_io #from_io" do
+      array = Array(String).new 10 { rand_string 100 }
+      test_to_from_io array
+    end
   end
 
-  it "Struct TestStruct #to_io #from_io" do
-    test_to_from_io TestStruct.gen_random
+  describe Struct do
+    it "#to_io #from_io" do
+      test_to_from_io TestStruct.gen_random
+    end
   end
 
-  it "Class TestClass #to_io #from_io" do
-    value = test_to_from_io TestClass.gen_random
-    value.non_serializable_field.should be_falsey
+  describe Class do
+    it "#to_io #from_io" do
+      value = test_to_from_io TestClass.gen_random
+      value.non_serializable_field.should be_falsey
+    end
   end
 end
+
+
