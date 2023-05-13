@@ -22,7 +22,6 @@ module CryStorage::PageManagement
   end
 
   # TODO: index slot
-  # TODO: Write table slot, must support column types Integer Varchar and Boolean
   
   annotation RefClass; end
   
