@@ -26,6 +26,12 @@ class IO::Memory
 end
 
 class IO::Memory
+  def self.build(*args)
+    io = Memory.new *args
+    with io yield
+    io.rewind
+  end
+
   def slice(offet, size) : Memory
     Memory.new to_slice[@pos + offet, size], writeable: @writeable
   end
@@ -42,6 +48,7 @@ class IO::Memory
     io = IO::Memory.new
     copy io
   end
+
 end
 
 module Indexable::Item(T)
