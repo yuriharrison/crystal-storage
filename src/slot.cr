@@ -25,29 +25,45 @@ module CryStorage::PageManagement
   
   annotation RefClass; end
   
-  enum DataType
-    @[RefClass(Bool)]
-    Bool = 1
-    @[RefClass(Char)]
-    Char = 2
-    @[RefClass(Int16)]
-    Int16 = 10
-    @[RefClass(Int32)]
-    Int32 = 11
-    @[RefClass(Int64)]
-    Int64 = 12
-    @[RefClass(Int64)]
-    Int = 13
-    @[RefClass(Int128)]
-    Int128 = 14
-    @[RefClass(String)]
-    Text = 50
+  struct DataType
+    Boolean = DataType.new 1, Bool
+    Char = DataType.new 2, Char
+    SmallInt = DataType.new 10, Int16
+    Integer = DataType.new 11, Int32
+    BigInt = DataType.new 12, Int64
+    HugeInt = DataType.new 13, Int128
+    Text = DataType.new 50, String
     
-    def ref_class
-      {% unless self.annotation(RefClass) %}
-        raise "DataType: #{value} must implement annotation RefClass."
-      {% end %}
-      {{ self.annotation(RefClass)[0] }}
+    getter ref_class
+
+    def initialize(@value : Int32, @ref_class : Object.class)
+    end
+
+    def self.from_io(io, format)
+      self.from io.read_bytes Int32
+    end
+
+    def self.from(value)
+      case value
+      when 1
+        Bool
+      when 2
+        Char
+      when 10
+        SmallInt
+      when 11
+        Integer
+      when 12
+        BigInt
+      when 13
+        HugeInt
+      when 50
+        Text
+      end
+    end
+
+    def to_io(io, format)
+      io.write_bytes @value
     end
   end
 
@@ -65,7 +81,7 @@ module CryStorage::PageManagement
 
     def bools
       @columns.each do |column|
-        yield column if column.data_type == DataType::Bool
+        yield column if column.data_type == DataType::Boolean
       end
     end
 
@@ -113,37 +129,30 @@ module CryStorage::PageManagement
     # TODO implement self.from_io
     # TODO fix warnnings
     property status : SlotStatus = SlotStatus.from_value(0)
-    property page : Page(TestSlot)? = nil
+    property page : IPage? = nil
     not_nil page
     property id : Int64? = nil
     not_nil id
-    property table : Table?
-    not_nil table
       
     def initialize(@page : IPage, @id : Index, io : IO::Memory)
       @status = io.read_bytes SlotStatus
-      # TODO fix this
-      # implement self.from_io
-      # modify Page slot retrival use from_io
-      # decide where table info should live; probably on page
-      @io = io
+      # @values = Slice.new page!.table.columns.size do |i|
+      #   io.read_bytes page!.table.columns[i].data_type.ref_class
+      # end
     end
 
-    def load
-      @values = Slice.new table!.columns.size do |i|
-        @io.read_bytes table!.columns[i].data_type.ref_class
-      end
+    def set(column, value)
+      @values[column_index column] = value
     end
-
+    
     def get(column)
-      index = table!.columns.index &.name == column
-      @values[index]
+      @values[column_index column]
     end
-
+    
     def get(column : Column)
       get column.name
     end
-
+    
     def indexer : IPage
       page!
     end
@@ -151,31 +160,34 @@ module CryStorage::PageManagement
     def index
       id!
     end
-  
+    
     def delete
       @status |= SlotStatus::Deleted
     end
-  
+    
     def deleted?
       @status.deleted?
     end
-  
+    
     def byte_size
       # TODO: implement, add #byte_size to all serializable objects
       200
     end
-  
+    
     def to_io(io, format)
       io.write_bytes @status
       @values.each { |value| io.write_bytes value }
     end
-  
+    
     def to_s
       raise "not implemented"
     end
-
+    
+    private def column_index(column)
+      table!.columns.index &.name == column
+    end
   end
-
+  
 end
 
 # COLUMNS

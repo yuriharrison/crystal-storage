@@ -46,7 +46,7 @@ end
 
 module Indexable::Item(T)
   abstract def index
-  abstract def indexer : Indexable::Mutable(T)
+  abstract def indexer
 
   def flush
     indexer[index] = self

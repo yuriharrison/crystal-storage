@@ -1,10 +1,5 @@
-macro not_nil(value, message = nil)
+macro not_nil(value)
   def {{value}}!
-    @{{value}}.not_nil! {{message}}
+    @{{value}}.not_nil!
   end
-end
-
-macro not_nil_property(value, message)
-  property {{value}}
-  not_nil {{value}}, {{message}}
 end

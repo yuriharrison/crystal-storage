@@ -17,17 +17,8 @@ module CryStorage::PageManagement
 
   abstract class IPage
     include Indexable::Mutable(ISlot)
-    include Indexable::Item(IO::Memory)
-
-    abstract def initialize(@manager : IManager, @id : Index, @buffer : IO::Memory)
-
-    def indexer : IManager
-      @manager
-    end
-
-    def index : Index
-      @id
-    end
+    
+    abstract def table
   end
   
   struct PageHeader
@@ -54,6 +45,7 @@ module CryStorage::PageManagement
     # TODO: implement slot table
     # TODO: implement transactions
     # TODO: make write operations thread-safe
+    include Indexable::Item(IO::Memory)
 
     BYTE_SIZE = 1024_i64
     HEADER_SIZE = PageHeader::SIZE
@@ -61,18 +53,24 @@ module CryStorage::PageManagement
     SLOT_LINK_SIZE = INT_SIZE*2
 
     @body : IO::Memory
+    property table : Table
 
-    def initialize(@manager : IManager, @id : Index, @buffer : IO::Memory)
+    def initialize(@manager : IManager, @id : Index, @table : Table, @buffer : IO::Memory)
       @header = PageHeader.new buffer
       @body = buffer.slice
-    end
-
-    def from_io(io, format)
     end
 
     def to_io(io, format)
       io.write_bytes @header
       io.copy_from @body
+    end
+
+    def indexer
+      @manager
+    end
+
+    def index
+      @id
     end
 
     def size
