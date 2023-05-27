@@ -33,21 +33,27 @@ describe Cell do
       .tap { |io| Cell.from_io(io, String).value.should eq expected_value }
   end
 
-  # it "forwards operations" do
-  #   # TODO implement
-  #   (Cell.new(10) + Cell.new(10)).should eq 20
-  #   (Cell.new(10) ^ Cell.new(10)).should eq 20
-  #   (Cell.new("10") + Cell.new("10")).should eq "1010"
-  # end
+  it "forwards operations" do
+    (Cell.new("10") + Cell.new("10")).should eq "1010"
+    (Cell.new(10) + Cell.new(10)).should eq 20
+    (Cell.new(10) - Cell.new(10)).should eq 0
+    (Cell.new(10) == Cell.new(10)).should be_truthy
+    (Cell.new(10) != Cell.new(10)).should be_falsey
+    (Cell.new(10) ^ Cell.new(10)).should eq 0
+    (Cell.new(10) & Cell.new(10)).should eq 10
+    (Cell.new(10) | Cell.new(10)).should eq 10
+    (Cell.new(10) << Cell.new(1)).should eq 20
+    (Cell.new(10) >> Cell.new(1)).should eq 5
+  end
 end
 
 
 describe Table do
   it ".new" do
-    col_id = Column.new("id", DataType::Integer, nil, 1_u64, false, Column::Key::PrimaryKey)
-    col_name = Column.new("name", DataType::Text, nil, 2_u64, false, nil)
-    col_score = Column.new("score", DataType::BigInt, nil, 3_u64, false, nil)
-    col_active = Column.new("active", DataType::Boolean, nil, 4_u64, false, nil)
+    col_id = Column.new("id", DataType::Integer, nil, 1, false, Column::Key::PrimaryKey)
+    col_name = Column.new("name", DataType::Text, nil, 2, false, nil)
+    col_score = Column.new("score", DataType::BigInt, nil, 3, false, nil)
+    col_active = Column.new("active", DataType::Boolean, nil, 4, false, nil)
     columns = Slice[col_id, col_name, col_score, col_active]
     table = Table.new "test_schema", "test_table", columns
 
@@ -57,10 +63,10 @@ describe Table do
 end
 
 describe Slot do
-  col_id = Column.new("id", DataType::Integer, nil, 1_u64, false, Column::Key::PrimaryKey)
-  col_name = Column.new("name", DataType::Text, nil, 2_u64, false, nil)
-  col_score = Column.new("score", DataType::BigInt, nil, 3_u64, false, nil)
-  col_active = Column.new("active", DataType::Boolean, nil, 4_u64, false, nil)
+  col_id = Column.new("id", DataType::Integer, nil, 1, false, Column::Key::PrimaryKey)
+  col_name = Column.new("name", DataType::Text, nil, 2, false, nil)
+  col_score = Column.new("score", DataType::BigInt, nil, 3, false, nil)
+  col_active = Column.new("active", DataType::Boolean, nil, 4, false, nil)
   columns = Slice[col_id, col_name, col_score, col_active]
   table = Table.new "test_schema", "test_table", columns
   slot = uninitialized Slot

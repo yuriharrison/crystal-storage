@@ -114,3 +114,24 @@ class String
     io
   end
 end
+
+struct BitArray  
+  def self.from_io(io : IO, format=nil)
+    size = io.read_bytes(UInt32)
+    BitArray
+      .new(size)
+      .from_slice Bytes.new((size / 8).ceil.to_i) { io.read_bytes UInt8 }
+  end
+
+  def from_slice(bytes : Bytes)
+    @bits = bytes.to_unsafe.as(Pointer(UInt32))
+    self
+  end
+
+  def to_io(io : IO, format=nil)
+    io.write_bytes size
+    # TODO write pointer direclty insated of iterating
+    to_slice.each { |value| io.write_bytes value }
+    io
+  end
+end

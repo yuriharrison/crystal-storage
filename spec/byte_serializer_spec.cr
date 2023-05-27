@@ -105,6 +105,18 @@ describe Serializable do
       value.non_serializable_field.should be_falsey
     end
   end
+
+  describe BitArray do
+    it "" do
+      bit_array = BitArray.new 16, initial: true 
+      bit_array[9] = false
+      IO::Memory
+        .new
+        .write_bytes(bit_array)
+        .rewind
+        .read_bytes(BitArray)
+        .==(bit_array)
+        .should be_truthy
+    end
+  end
 end
-
-

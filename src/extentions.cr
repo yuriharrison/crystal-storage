@@ -1,3 +1,20 @@
+struct Bool
+  def <(other)
+    !self && self != other
+  end
+
+  def <=(other)
+    !self
+  end
+
+  def >(other)
+    self && self != other
+  end
+
+  def >=(other)
+    self
+  end
+end
 
 # TODO: create a SlotLink serializable class
 # then delete the code extension bellow

@@ -2,8 +2,6 @@ require "./utils"
 require "./slot"
 
 module CryStorage::PageManagement
-  alias Index = Int64
-  alias Address = Tuple(Index, Index)
   alias Link = Tuple(Int64, Int64)
 
   INT_SIZE = sizeof(Int64).to_i64
@@ -41,8 +39,6 @@ module CryStorage::PageManagement
   end
 
   class Page(T) < IPage
-    # TODO: implement slot index
-    # TODO: implement slot table
     # TODO: implement transactions
     # TODO: make write operations thread-safe
     include Indexable::Item(IO::Memory)
@@ -77,9 +73,9 @@ module CryStorage::PageManagement
       @header.size
     end
     
-    def unsafe_fetch(slot_id : Int) : ISlot
-      offset, content_size = slot_link slot_id
-      T.new self, slot_id.to_i64, @body[offset, content_size]
+    def unsafe_fetch(index : Int) : ISlot
+      offset, content_size = slot_link index
+      T.new self, index.to_i64, @body[offset, content_size]
     end
 
     def []=(slot_id : Int, slot : ISlot)
@@ -87,11 +83,11 @@ module CryStorage::PageManagement
       unsafe_put slot_id, slot
     end
 
-    def unsafe_put(slot_id : Int, slot : ISlot)
-      offset, previous_size = slot_link slot_id
-      offset = next_offset slot.byte_size if previous_size < slot.byte_size
-      slot_link_slice(slot_id).write_bytes({ offset, slot.byte_size })
-      @body[offset, slot.byte_size].write_bytes slot
+    def unsafe_put(index : Int, value : ISlot)
+      offset, previous_size = slot_link index
+      offset = next_offset value.byte_size if previous_size < value.byte_size
+      slot_link_slice(index).write_bytes({ offset, value.byte_size })
+      @body[offset, value.byte_size].write_bytes value
     end
     
     def push(slot : ISlot)
@@ -185,8 +181,8 @@ module CryStorage::PageManagement
       @buffer[index*PAGE_SIZE, PAGE_SIZE]
     end
     
-    def unsafe_put(index : Int, io : IO::Memory)
-      unsafe_fetch(index).write io.to_slice
+    def unsafe_put(index : Int, value : IO::Memory)
+      unsafe_fetch(index).write value.to_slice
     end
     
     def [](index : Int) : IO::Memory
