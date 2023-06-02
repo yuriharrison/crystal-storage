@@ -1,5 +1,5 @@
 
-module CryStorage::Indexes
+module CryStorage::Indexers
   # TODO Directory class maps table X pages
   # TODO IMPLEMENT SCAN CLASS
   # TODO IMPLEMENT BASIC SELECT WITH SCAN AND INDEX BASED ON WHERE CLAUSE
@@ -8,10 +8,21 @@ module CryStorage::Indexes
 
   module Indexer
     include Indexable::Mutable(Address)
+
+    abstract def columns
+    abstract def range?
   end
 
   class MemoryHash(K) < Hash(K, Address)
     include Indexer
+
+    def initialize(@column : Column); end
+
+    def columns
+      Slice[@column]
+    end
+
+    def range?; false; end
 
     def unsafe_fetch(index)
       self[index]

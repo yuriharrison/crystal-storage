@@ -58,7 +58,7 @@ module CryStorage
     end
   end
 
-  struct Table
+  struct TableSchema
     @schema : String
     @name : String
     @bools_count : Int32?
@@ -116,25 +116,25 @@ module CryStorage
     end
   end
 
-  struct Cell(T)
-    property value : T
+  # struct Cell(T)
+  #   property value : T
 
-    def initialize(@value : T)
-    end
+  #   def initialize(@value : T)
+  #   end
 
-    def self.from_io(io, type) : Cell
-      Cell.new io.read_bytes type
-    end
+  #   def self.from_io(io, type) : Cell
+  #     Cell.new io.read_bytes type
+  #   end
 
-    def to_io(io, format)
-      io.write_bytes @value
-    end
+  #   def to_io(io, format)
+  #     io.write_bytes @value
+  #   end
 
-    # FORWARD OPERATORS
-    {% begin %}
-      {% for operator in %w(== != <=> + - * / % ^ & | << >> ~) %}
-        def {{operator.id}}(other); value {{operator.id}} other.value; end
-      {% end %}
-    {% end %}
-  end
+  #   # FORWARD OPERATORS
+  #   {% begin %}
+  #     {% for operator in %w(== != <=> + - * / % ^ & | << >> ~) %}
+  #       def {{operator.id}}(other); value {{operator.id}} other.value; end
+  #     {% end %}
+  #   {% end %}
+  # end
 end

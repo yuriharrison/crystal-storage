@@ -49,9 +49,9 @@ module CryStorage::PageManagement
     SLOT_LINK_SIZE = INT_SIZE*2
 
     @body : IO::Memory
-    property table : Table
+    property table : TableSchema
 
-    def initialize(@manager : IManager, @id : Index, @table : Table, @buffer : IO::Memory)
+    def initialize(@manager : IManager, @id : Index, @table : TableSchema, @buffer : IO::Memory)
       @header = PageHeader.new buffer
       @body = buffer.slice
     end
@@ -164,9 +164,14 @@ module CryStorage::PageManagement
   class MemoryManager < IManager
     MIN_SIZE = 4
     PAGE_SIZE = 1024
+    @@default : MemoryManager?
     
     def initialize
       @buffer = IO::Memory.new Slice.new PAGE_SIZE*MIN_SIZE, UInt8::MIN
+    end
+
+    def self.default
+      @@default ||= new
     end
 
     def size : Int

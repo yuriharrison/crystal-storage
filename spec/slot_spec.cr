@@ -5,7 +5,7 @@ include CryStorage::PageManagement
 class TestPage < IPage
     getter table
 
-    def initialize(@table : Table)
+    def initialize(@table : TableSchema)
     end
 
     def size
@@ -20,42 +20,42 @@ class TestPage < IPage
     end
 end
 
-describe Cell do
-  it "#from_io #to_io" do
-    expected_value = "test string"
-    io_value = IO::Memory
-      .new
-      .tap { write_bytes expected_value }
-      .rewind
-    IO::Memory.new
-      .tap { write_bytes Cell.from_io io_value, String }
-      .rewind
-      .tap { |io| Cell.from_io(io, String).value.should eq expected_value }
-  end
+# describe Cell do
+#   it "#from_io #to_io" do
+#     expected_value = "test string"
+#     io_value = IO::Memory
+#       .new
+#       .tap { write_bytes expected_value }
+#       .rewind
+#     IO::Memory.new
+#       .tap { write_bytes Cell.from_io io_value, String }
+#       .rewind
+#       .tap { |io| Cell.from_io(io, String).value.should eq expected_value }
+#   end
 
-  it "forwards operations" do
-    (Cell.new("10") + Cell.new("10")).should eq "1010"
-    (Cell.new(10) + Cell.new(10)).should eq 20
-    (Cell.new(10) - Cell.new(10)).should eq 0
-    (Cell.new(10) == Cell.new(10)).should be_truthy
-    (Cell.new(10) != Cell.new(10)).should be_falsey
-    (Cell.new(10) ^ Cell.new(10)).should eq 0
-    (Cell.new(10) & Cell.new(10)).should eq 10
-    (Cell.new(10) | Cell.new(10)).should eq 10
-    (Cell.new(10) << Cell.new(1)).should eq 20
-    (Cell.new(10) >> Cell.new(1)).should eq 5
-  end
-end
+#   it "forwards operations" do
+#     (Cell.new("10") + Cell.new("10")).should eq "1010"
+#     (Cell.new(10) + Cell.new(10)).should eq 20
+#     (Cell.new(10) - Cell.new(10)).should eq 0
+#     (Cell.new(10) == Cell.new(10)).should be_truthy
+#     (Cell.new(10) != Cell.new(10)).should be_falsey
+#     (Cell.new(10) ^ Cell.new(10)).should eq 0
+#     (Cell.new(10) & Cell.new(10)).should eq 10
+#     (Cell.new(10) | Cell.new(10)).should eq 10
+#     (Cell.new(10) << Cell.new(1)).should eq 20
+#     (Cell.new(10) >> Cell.new(1)).should eq 5
+#   end
+# end
 
 
-describe Table do
+describe TableSchema do
   it ".new" do
     col_id = Column.new("id", DataType::Integer, nil, 1, false, Column::Key::PrimaryKey)
     col_name = Column.new("name", DataType::Text, nil, 2, false, nil)
     col_score = Column.new("score", DataType::BigInt, nil, 3, false, nil)
     col_active = Column.new("active", DataType::Boolean, nil, 4, false, nil)
     columns = Slice[col_id, col_name, col_score, col_active]
-    table = Table.new "test_schema", "test_table", columns
+    table = TableSchema.new "test_schema", "test_table", columns
 
     table.columns.size.should eq 4
     table.bools { |col| col.should eq col_active }
@@ -68,7 +68,7 @@ describe Slot do
   col_score = Column.new("score", DataType::BigInt, nil, 3, false, nil)
   col_active = Column.new("active", DataType::Boolean, nil, 4, false, nil)
   columns = Slice[col_id, col_name, col_score, col_active]
-  table = Table.new "test_schema", "test_table", columns
+  table = TableSchema.new "test_schema", "test_table", columns
   slot = uninitialized Slot
 
   test_values = { 1, "Scott", 100_i64, true }

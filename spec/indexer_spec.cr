@@ -1,6 +1,6 @@
 require "./spec_helper"
 
-include CryStorage::Indexes
+include CryStorage::Indexers
 
 
 describe MemoryHash do

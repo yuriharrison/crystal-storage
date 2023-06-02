@@ -9,17 +9,24 @@ describe Query do
   col_score = Column.new("score", DataType::BigInt, nil, 3, false, nil)
   col_active = Column.new("active", DataType::Boolean, nil, 4, false, nil)
   columns = Slice[col_id, col_name, col_score, col_active]
-  table = Table.new "test_schema", "test_table", columns
-  test_values = { 1, "Scott", 100_i64, true }
-  slot = PageManagement::Slot.from table, *test_values
+  schema = TableSchema.new "test_schema", "test_table", columns
+  pageManager = PageManagement::MemoryManager.default
+  index_id = Indexers::MemoryHash(Int32).new col_id
+  indexes = [index_id] of Indexer
+  table = PersistentTable.new schema, pageManager, indexes
 
+  test_values = { 1, "Scott", 100_i64, true }
+  slot = PageManagement::Slot.from schema, *test_values
 
   it "test" do
     c1 = Constant.new(1)
     c2 = Constant.new("2")
     filter = And.new c1, c2
     pp! filter.eval
+    pp! filter.to_s
+    filter.each { |expr| puts expr }
     q = Query.new(
+      table,
       Slice[col_id, col_name, col_score, col_active],
       nil,
       filter

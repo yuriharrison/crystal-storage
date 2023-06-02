@@ -76,12 +76,12 @@ end
 describe Page(TestSlot) do
   page_id = 0_i64
   page_manager = MemoryManager.new
-  # table = Table.new(
+  # table = TableSchema.new(
   #   "test_schema",
   #   "test_table",
   #   Slice.new 1 { Column.new("column", DataType::Boolean, nil, 1, false, nil).as(Column) },
   # )
-  table = uninitialized Table
+  table = uninitialized TableSchema
   page = Page(TestSlot).new page_manager, page_id, table, page_manager[page_id]
   slot_a = TestSlot.new.tap { randomize }
   slot_b = TestSlot.new.tap { randomize }

@@ -32,7 +32,7 @@ module CryStorage::PageManagement
     property id : Int64? = nil
     not_nil id
 
-    @table : Table
+    @table : TableSchema
     @values : Slice(DataType::All)
     @nulls : BitArray
     @bools : BitArray
@@ -50,7 +50,7 @@ module CryStorage::PageManagement
       initialize page!.table, io
     end
 
-    def self.from(table : Table, *args)
+    def self.from(table : TableSchema, *args)
       Slot.new table, IO::Memory.build {
         write_bytes SlotStatus::Idle
         write_bytes BitArray.new 0
