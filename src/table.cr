@@ -59,14 +59,19 @@ module CryStorage
   end
 
   struct TableSchema
-    @schema : String
-    @name : String
+    getter schema : String
+    getter name : String
     @bools_count : Int32?
     getter columns : Slice(Column)
 
     def initialize(@schema, @name, @columns)
       validate
       @columns.sort! &.order
+      @columns.each { |col| col.table = self }
+    end
+
+    def ==(other)
+      !other.nil? && name == other.name && schema == other.schema
     end
 
     def validate
@@ -101,6 +106,7 @@ module CryStorage
     getter data_type : DataType::Any
     getter default : Bytes?
     getter order : Int32
+    property table : TableSchema?
     @is_nilable : Bool
     @key : Key?
 
@@ -109,6 +115,10 @@ module CryStorage
 
     def nilable?
       @is_nilable
+    end
+
+    def ==(other)
+      name == other.name && (table == other.table)
     end
 
     def bool?

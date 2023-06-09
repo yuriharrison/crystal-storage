@@ -17,9 +17,10 @@ module CryStorage::PageManagement
     abstract def byte_size
     abstract def delete
     abstract def deleted?
+    abstract def indexer : IPage
 
     def address : Address
-      { indexer.index, index }
+      { indexer.id, id }
     end
   end
 
@@ -29,7 +30,7 @@ module CryStorage::PageManagement
     property status : SlotStatus = SlotStatus::Idle
     property page : IPage? = nil
     not_nil page
-    property id : Int64? = nil
+    property id : Int32? = nil
     not_nil id
 
     @table : TableSchema
@@ -82,7 +83,7 @@ module CryStorage::PageManagement
       page!
     end
     
-    def index
+    def id : Int32
       id!
     end
     
@@ -99,10 +100,19 @@ module CryStorage::PageManagement
       200
     end
     
+    # def items
+    #   @table.columns.zip @values do |column, value|
+    #     yield column, value
+    #   end
+    # end
     
-    def to_s
-      raise "not implemented"
-    end
+    # def to_s(io)
+    #   io << "<Slot #{@table.to_s}"
+    #   items do |column, value|
+    #     io << " #{column}: #{value}"
+    #   end
+    #   io << ">"
+    # end
     
     private def column_index(column)
       @table.columns.index! &.name.== column

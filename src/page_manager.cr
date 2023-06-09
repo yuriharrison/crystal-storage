@@ -16,6 +16,7 @@ module CryStorage::PageManagement
   abstract class IPage
     include Indexable::Mutable(ISlot)
     
+    abstract def id
     abstract def table
   end
   
@@ -25,11 +26,11 @@ module CryStorage::PageManagement
     property version
     property size
 
-    def initialize(@version : Int64, @size : Int64)
+    def initialize(@version : Int64, @size : Int32)
     end
 
     def initialize(io : IO::Memory)
-      initialize io.read_bytes(Int64), io.read_bytes(Int64)
+      initialize io.read_bytes(Int64), io.read_bytes(Int32)
     end
     
     def to_io(io, format)
@@ -61,11 +62,11 @@ module CryStorage::PageManagement
       io.copy_from @body
     end
 
-    def indexer
+    def indexer : Indexable::Mutable(IO::Memory)
       @manager
     end
 
-    def index
+    def id : Index
       @id
     end
 
@@ -75,7 +76,7 @@ module CryStorage::PageManagement
     
     def unsafe_fetch(index : Int) : ISlot
       offset, content_size = slot_link index
-      T.new self, index.to_i64, @body[offset, content_size]
+      T.new self, index, @body[offset, content_size]
     end
 
     def []=(slot_id : Int, slot : ISlot)
@@ -179,13 +180,9 @@ module CryStorage::PageManagement
     end
 
     def unsafe_fetch(index : Int) : IO::Memory
-      unsafe_fetch index.to_i64
-    end
-
-    def unsafe_fetch(index : Int64) : IO::Memory
       @buffer[index*PAGE_SIZE, PAGE_SIZE]
     end
-    
+
     def unsafe_put(index : Int, value : IO::Memory)
       unsafe_fetch(index).write value.to_slice
     end

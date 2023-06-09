@@ -69,10 +69,10 @@ class IO::Memory
 end
 
 module Indexable::Item(T)
-  abstract def index
+  abstract def id : Index
   abstract def indexer
 
   def flush
-    indexer[index] = self
+    indexer[id] = self
   end
 end

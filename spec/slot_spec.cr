@@ -8,6 +8,10 @@ class TestPage < IPage
     def initialize(@table : TableSchema)
     end
 
+    def id
+      1
+    end
+
     def size
       1
     end

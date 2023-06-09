@@ -4,20 +4,23 @@ require "./table"
 
 module CryStorage::SQL
   module ExprValue
-    abstract def eval
+    abstract def eval(slot)
   end
 
   alias Numeric = Int128 | Int16 | Int32 | Int64 | UInt8 | UInt16 | UInt32 | UInt64
   alias ExprValueType = Numeric | Bool | String
-  alias ExprFinal = Constant
+  # TODO add all range expr
+  alias RangeExpr = LessThan
 
   abstract class BoolExpr
     include ExprValue
     include Enumerable(BoolExpr)
 
+    @exprs : Array(BoolExpr)?
+
     abstract def symbol
 
-    def initialize(@left : BoolExpr | ExprFinal, @right : BoolExpr | ExprValue)
+    def initialize(@left : BoolExpr | ExprValue, @right : BoolExpr | ExprValue)
     end
 
     def left
@@ -28,29 +31,54 @@ module CryStorage::SQL
       @right
     end
 
-    def each(&block : BoolExpr ->)
+    protected def traverse(&block : BoolExpr ->)
       if leaf?
         yield self
         return
       end
 
-      left.unsafe_as(BoolExpr).each do |expr|
+      left.unsafe_as(BoolExpr).traverse do |expr|
         block.call expr
       end
 
       block.call self
 
-      right.unsafe_as(BoolExpr).each do |expr|
+      right.unsafe_as(BoolExpr).traverse do |expr|
         block.call expr
       end
     end
 
+    def each
+      @exprs ||= begin
+        arr = Array(BoolExpr).new
+        traverse { |expr| arr << expr }
+        arr
+      end
+      @exprs.not_nil!.each do |expr|
+        yield expr
+      end
+    end
+
     def leafs
-      each { |expr| yield if expr.leaf? }
+      each { |expr| yield expr if expr.leaf? }
+    end
+
+    def leafs
+      arr = Array(BoolExpr).new
+      leafs { |expr| arr << expr }
+      arr
     end
 
     def leaf?
       !(left.is_a?(BoolExpr) || left.is_a?(BoolExpr))
+    end
+
+    def constant : Constant
+      case
+      when left.is_a? Constant; left.unsafe_as(Constant)
+      when right.is_a? Constant; right.unsafe_as(Constant)
+      else raise "No constant on expr #{self}"
+      end
     end
 
     def to_s(io)
@@ -77,8 +105,8 @@ module CryStorage::SQL
 
     def symbol; "AND" end
 
-    def eval
-      !!(left.eval && right.eval)
+    def eval(slot)
+      !!(left.eval(slot) && right.eval(slot))
     end
   end
 
@@ -86,8 +114,8 @@ module CryStorage::SQL
     
     def symbol; "OR" end
 
-    def eval
-      !!(left.eval || right.eval)
+    def eval(slot)
+      !!(left.eval(slot) || right.eval(slot))
     end
   end
 
@@ -99,9 +127,9 @@ module CryStorage::SQL
 
     def symbol; "==" end
     
-    def eval
-      left_value = left.eval
-      right_value = right.eval
+    def eval(slot)
+      left_value = left.eval(slot)
+      right_value = right.eval(slot)
       ensureTypes! left_value, right_value
       left_value == right_value
     end
@@ -115,43 +143,55 @@ module CryStorage::SQL
 
     def symbol; "<" end
     
-    def eval()
-      left_value = left.eval
-      right_value = right.eval
+    def eval(slot)
+      left_value = left.eval(slot)
+      right_value = right.eval(slot)
       ensureTypes! left_value, right_value
       left_value < right_value
     end
   end
 
   # class GreatherThan < BoolExpr
-  #   def eval
+  #   def eval(slot)
   #     ensureTypes! ">"
-  #     left.eval > right.eval
+  #     left.eval(slot) > right.eval(slot)
   #   end
   # end
 
   # class Different < BoolExpr
-  #   def eval
+  #   def eval(slot)
   #     ensureTypes! "!="
-  #     left.eval != right.eval
+  #     left.eval(slot) != right.eval(slot)
   #   end
   # end
 
-  # class Attribute
-  #   include ExprValue
+  class Attribute
+    include ExprValue
 
-  #   def initialize(@column : String)
-  #   end
+    def initialize(@column : Column)
+    end
 
-  #   def eval
-  #     slot.get @column
-  #   end
-  # end
+    def ==(other : Attribute)
+      @column == other.@column
+    end
+
+    def ==(column : Column)
+      @column == column
+    end
+
+    def eval(slot)
+      slot.get @column
+    end
+  end
 
   class Constant
     include ExprValue
 
-    def initialize(@value : ExprValueType)
+    def initialize(@value : Int32 | String)
+    end
+
+    def eval(slot)
+      eval
     end
 
     def eval
@@ -168,14 +208,16 @@ module CryStorage::Query
   include Indexers
 
   module Table
-    abstract def insert(slot)
-    abstract def indexer(column, range=false)
+    abstract def schema
+    abstract def get(address : Address) : ISlot
+    abstract def insert(slot : ISlot)
+    abstract def indexer(column : Column, range=false)
   end
 
   struct PersistentTable
     include Table
     # TODO implement; diff tmp table from actual table
-    @schema : TableSchema
+    getter schema : TableSchema
     @indices : Array(Indexer)?
     @pageManager : PageManagement::IManager
 
@@ -186,27 +228,42 @@ module CryStorage::Query
     def initialize(@schema, @pageManager, @indices)
     end
 
-    def insert(slot)
-      # TODO
+    def get(address : Address) : ISlot
+      raise "not implemented"
     end
 
-    def indexer(column, range=false)
+    def insert(slot)
+      raise "not implemented"
+    end
+
+    def indexer(column : Column, range=false)
       return nil if @indices.nil?
 
-      @indices.find { |indexer|
-        (!range || indexer.range?) \
-        && indexer.columns.any? &.== column }
+      @indices.not_nil!.find { |indexer|
+        indexer.columns.any?(&.==(column)) &&
+        (!range || indexer.range?)
+      }
     end
   end
 
   struct JoinTable
-     include Table
+    include Table
+    getter schema : TableSchema
+    @pageManager : PageManagement::IManager
 
-    def insert(slot)
-      # TODO
+    def initialize(@schema, @pageManager)
+      initialize(@schema, @pageManager, nil)
     end
 
-    def indexer(column, range=false); end
+    def get(address : Address) : ISlot
+      raise "not implemented"
+    end
+
+    def insert(slot)
+      raise "not implemented"
+    end
+
+    def indexer(column : Column, range=false); end
   end
 
   struct JoinExpr
@@ -233,10 +290,8 @@ module CryStorage::Query
     @joinExprs : Slice(JoinExpr)?
     @filters : SQL::BoolExpr
     @table : Table
-    @joinIndexer : Object.class
 
     def initialize(@table, @fields, @joinExprs, @filters)
-      @joinIndexer = MemoryHash
     end
     
     def each
@@ -246,28 +301,28 @@ module CryStorage::Query
           yield slot
         end
       else
-        join @joinExprs do |slot|
-          yield slot
-        end
+        # join @joinExprs do |slot|
+        #   yield slot
+        # end
       end
     end
     
-    def join(joinExprs)
-      join_table = nil
-      joins.each do |expr|
-        expr.left = join_table unless join_table.nil?
-        fields = @fields # should be columns of left and right combined
-        schema = TableSchema.new "tmp_join", "00001", columns
-        # TODO add expr.right.columns to join_table
-        join_table = JoinTable.new schema, PageManagement::MemoryManager.default
-        join expr do |slot|
-          join_table.insert slot
-        end
-      end
-    end
+    # def join(joinExprs)
+    #   join_table = nil
+    #   joins.each do |expr|
+    #     expr.left = join_table unless join_table.nil?
+    #     fields = @fields # should be columns of left and right combined
+    #     schema = TableSchema.new "tmp_join", "00001", columns
+    #     # TODO add expr.right.columns to join_table
+    #     join_table = JoinTable.new schema, PageManagement::MemoryManager.default
+    #     join expr do |slot|
+    #       join_table.insert slot
+    #     end
+    #   end
+    # end
 
-    def join(expr)
-      indexer = @joinIndexer.new
+    def join(expr : JoinExpr)
+      indexer = MemoryHash(Int32).new expr.condition.leafs.first
       scan(expr.left) do |slot|
         key = slot.get expr.left_column
         indexer[key] = slot
@@ -281,7 +336,33 @@ module CryStorage::Query
     end
 
     def scan(table)
-      
+      # TODO: OPTIMIZE: pre select a exprs to use
+      # TODO: OPTIMIZE: allow multi-index match
+      expr : SQL::BoolExpr? = nil
+      column = table.schema.columns.find do |column|
+        expr = @filters.leafs.find do |expr|
+          (expr.left.is_a? Attribute && expr.left == column) ||
+          (expr.right.is_a? Attribute && expr.right == column)
+        end
+      end
+
+      # TODO IMPLEVE READABELETY
+      range = expr.is_a?(SQL::RangeExpr)
+      unless column.nil? || expr.nil?
+        indexer = table.indexer column, range
+        if indexer && !range
+          # TODO group address by page before retrieving
+          indexer.scan(expr.constant.eval) do |address|
+            yield table.get address
+          end
+        elsif
+          raise "not implemented range scan"
+        else
+          raise "not implemented full scan"
+        end
+      else
+        raise "not implemented full scan"
+      end
     end
 
   end

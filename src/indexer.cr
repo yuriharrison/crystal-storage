@@ -7,29 +7,47 @@ module CryStorage::Indexers
   # TODO IMPLEMENT IMPLEMENT 
 
   module Indexer
-    include Indexable::Mutable(Address)
+    abstract def columns : Slice(Column)
+    abstract def scan(value : K, & : Address -> _) forall K
+    abstract def put(key : K, value : Address) forall K
+    abstract def delete(key : K) forall K
 
-    abstract def columns
-    abstract def range?
+    def put(key : K, value : ISlot) forall K
+      put key, value.address
+    end
+
+    def range?
+      is_a? RangeIndexer
+    end
+  end
+
+  module RangeIndexer(K)
+    include Indexer
+
+    abstract def scan(range : Range)
   end
 
   class MemoryHash(K) < Hash(K, Address)
     include Indexer
 
-    def initialize(@column : Column); end
+    def initialize(@column : Column)
+      initialize
+    end
 
-    def columns
+    def put(key, value : Address)
+      self[key.as(K)] = value
+    end
+
+    def columns : Slice(Column)
       Slice[@column]
     end
 
-    def range?; false; end
-
-    def unsafe_fetch(index)
-      self[index]
+    def scan(value)
+      yield self[value] if self[value]?
     end
 
-    def unsafe_put(index, value)
-      self[index] = value
+    def key_type
+      K
     end
   end
 end

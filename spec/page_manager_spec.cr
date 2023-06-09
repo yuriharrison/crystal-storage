@@ -12,7 +12,7 @@ class TestSlot < ISlot
   property status : SlotStatus = SlotStatus.from_value(0)
   property page : Page(TestSlot)? = nil
   not_nil page
-  property id : Int64? = nil
+  @id : Int32? = nil
   not_nil id
   
   def initialize
@@ -28,7 +28,11 @@ class TestSlot < ISlot
     page!
   end
   
-  def index
+  def id=(value : Index)
+    @id = value
+  end
+  
+  def id : Index
     id!
   end
 
@@ -74,7 +78,7 @@ class TestSlot < ISlot
 end
 
 describe Page(TestSlot) do
-  page_id = 0_i64
+  page_id = 0
   page_manager = MemoryManager.new
   # table = TableSchema.new(
   #   "test_schema",
@@ -103,7 +107,7 @@ describe Page(TestSlot) do
     page_manager[page_id] = page
 
     page = Page(TestSlot).new page_manager, page_id, table, page_manager[page_id]
-    slot_a_refetch = page[slot_a.index]
+    slot_a_refetch = page[slot_a.id]
     slot_a_refetch.address.should eq slot_a.address
     slot_a_refetch.to_s.should eq slot_a.to_s
   end
@@ -111,8 +115,8 @@ describe Page(TestSlot) do
   it "[]=" do
     old_state = slot_a.to_s
     expected_address = slot_a.address
-    page[slot_a.index] = slot_a.tap { randomize }
-    slot_a = page[slot_a.index]
+    page[slot_a.id] = slot_a.tap { randomize }
+    slot_a = page[slot_a.id]
 
     slot_a.to_s.should_not eq old_state
     slot_a.address.should eq expected_address
@@ -123,8 +127,8 @@ describe Page(TestSlot) do
     old_byte_size = slot_a.byte_size
     expected_address = slot_a.address
 
-    page[slot_a.index] = slot_a.tap { randomize_size }
-    slot_a = page[slot_a.index]
+    page[slot_a.id] = slot_a.tap { randomize_size }
+    slot_a = page[slot_a.id]
 
     slot_a.to_s.should_not eq old_state
     slot_a.byte_size.should_not eq old_byte_size
@@ -140,7 +144,7 @@ describe Page(TestSlot) do
   end
 
   it "#full?" do
-    page_id = 0_i64
+    page_id = 0
     page_manager = MemoryManager.new
     page = Page(TestSlot).new page_manager, page_id, table, page_manager[page_id]
 
