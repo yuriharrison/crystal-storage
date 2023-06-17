@@ -3,4 +3,11 @@ module CryStorage
   alias Address = Tuple(Index, Index)
 end
 
-require "./**"
+require "./utils.cr"
+require "./extentions.cr"
+require "./byte_serializer.cr"
+require "./page_manager.cr"
+require "./slot.cr"
+require "./indexer.cr"
+require "./table.cr"
+require "./query_execution.cr"

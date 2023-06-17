@@ -1,6 +1,6 @@
 require "./spec_helper"
 
-include CryStorage::PageManagement
+include  CryStorage::PageManagement
 
 class TestPage < IPage
     getter table
@@ -14,6 +14,9 @@ class TestPage < IPage
 
     def size
       1
+    end
+
+    def push(slot : ISlot)
     end
 
     def unsafe_fetch(index)
@@ -94,6 +97,13 @@ describe Slot do
   it "#to_io" do
     slot = Slot.new(table, IO::Memory.build { write_bytes slot })
     check_test_values.call slot
+  end
+
+  it "#delete" do
+    Slot.from(table, *test_values)
+      .tap { deleted?.should be_falsey }
+      .tap { delete }
+      .tap { deleted?.should be_truthy }
   end
 
   it "#set" do

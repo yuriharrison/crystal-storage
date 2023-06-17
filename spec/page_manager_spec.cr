@@ -135,12 +135,22 @@ describe Page(TestSlot) do
     slot_a.address.should eq expected_address
   end
 
-  it "#delete" do
-    TestSlot.new
-      .tap { deleted?.should be_falsey }
+
+  it "#each" do
+    initial_size = page.size
+    TestSlot
+      .new
       .tap { randomize }
+      .tap { |slot| page.push slot }
       .tap { delete }
-      .tap { deleted?.should be_truthy }
+      .tap { flush }
+    
+    page.size.should eq initial_size + 1
+    count = 0
+    page.each do |slot|
+      count += 1
+    end
+    count.should eq initial_size
   end
 
   it "#full?" do
@@ -153,5 +163,15 @@ describe Page(TestSlot) do
     end
 
     page.size.should eq (Page::BODY_SIZE/page.slot_cost(TestSlot::MIN_SIZE)).to_i
+  end
+
+  describe "TestSlot#delete" do
+    it "#delete" do
+      TestSlot.new
+        .tap { deleted?.should be_falsey }
+        .tap { randomize }
+        .tap { delete }
+        .tap { deleted?.should be_truthy }
+    end
   end
 end

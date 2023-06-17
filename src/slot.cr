@@ -99,7 +99,6 @@ module CryStorage::PageManagement
       # TODO: implement, add #byte_size to all serializable objects
       200
     end
-    
     # def items
     #   @table.columns.zip @values do |column, value|
     #     yield column, value
@@ -114,6 +113,8 @@ module CryStorage::PageManagement
     #   io << ">"
     # end
     
+    def_equals_and_hash address
+
     private def column_index(column)
       @table.columns.index! &.name.== column
     end

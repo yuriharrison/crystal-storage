@@ -16,6 +16,8 @@ module CryStorage::Indexers
       put key, value.address
     end
 
+    abstract def put(slot : ISlot)
+
     def range?
       is_a? RangeIndexer
     end
@@ -35,7 +37,24 @@ module CryStorage::Indexers
     end
 
     def put(key, value : Address)
-      self[key.as(K)] = value
+      raise %(
+        Key type error: #{key} of type '#{typeof(key)}'.\n
+        Expected #{K}
+      ) unless key.is_a?(K)
+
+      self[key.unsafe_as(K)] = value
+    end
+
+    def put(slot : ISlot) 
+      if columns.size == 1
+        put slot.get(columns.first), slot
+        return
+      end
+
+      key = columns.map do |column|
+        slot.get column
+      end.to_s
+      put key, slot
     end
 
     def columns : Slice(Column)
@@ -46,8 +65,5 @@ module CryStorage::Indexers
       yield self[value] if self[value]?
     end
 
-    def key_type
-      K
-    end
   end
 end

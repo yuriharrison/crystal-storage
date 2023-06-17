@@ -7,6 +7,7 @@ module CryStorage::PageManagement
   INT_SIZE = sizeof(Int64).to_i64
 
   abstract class IPage
+    abstract def push(slot : ISlot)
   end
 
   abstract class IManager
@@ -73,6 +74,15 @@ module CryStorage::PageManagement
     def size
       @header.size
     end
+    page.each do |slot|
+  
+    def each
+      each_index do |index|
+        slot = unsafe_fetch(index)
+        yield slot unless slot.deleted?
+      end
+    end
+
     
     def unsafe_fetch(index : Int) : ISlot
       offset, content_size = slot_link index

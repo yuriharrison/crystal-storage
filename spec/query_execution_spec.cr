@@ -3,6 +3,43 @@ require "./spec_helper.cr"
 include CryStorage::Query
 include CryStorage::SQL
 
+
+struct TestTable
+  include Table
+  
+  getter schema : TableSchema
+  @store = Hash(Address, ISlot).new
+  @indices : Array(Indexer)?
+  @page : IPage
+
+  def initialize(@page, @schema, @indices)
+  end
+
+  def get(address : Address) : ISlot
+    @store[address]
+  end
+
+  def insert(slot : ISlot)
+    @page.push slot
+    
+    @indices.not_nil!.each do |indexer|
+      indexer.put slot
+    end unless @indices.nil?
+
+    @store[slot.address] = slot
+  end
+
+  def indexer(column : Column, range=false)
+    return nil if @indices.nil?
+
+    @indices.not_nil!.find { |indexer|
+      indexer.columns.any?(&.==(column)) &&
+      (!range || indexer.range?)
+    }
+  end
+end
+
+
 describe Query do
   col_id = Column.new("id", DataType::Integer, nil, 1, false, Column::Key::PrimaryKey)
   col_name = Column.new("name", DataType::Text, nil, 2, false, nil)
@@ -10,17 +47,19 @@ describe Query do
   col_active = Column.new("active", DataType::Boolean, nil, 4, false, nil)
   columns = Slice[col_id, col_name, col_score, col_active]
   schema = TableSchema.new "test_schema", "test_table", columns
-  pageManager = PageManagement::MemoryManager.default
+  
+  page_manager = PageManagement::MemoryManager.default
+  page_id = 0
+  page = PageManagement::Page(PageManagement::Slot).new page_manager, page_id, schema, page_manager[page_id]
+  
   index_id = Indexers::MemoryHash(Int32).new col_id
   index_name = Indexers::MemoryHash(String).new col_name
   indexes = [index_id, index_name] of Indexer
-  table = PersistentTable.new schema, pageManager, indexes
+  table = TestTable.new page, schema, indexes
 
   test_values = { 1, "Scott", 100_i64, true }
   slot = PageManagement::Slot.from schema, *test_values
-
-  # add page to slot
-  index_id.put slot.get("id"), slot
+  table.insert slot
 
   it "test" do
     c1 = Constant.new(1)
@@ -36,8 +75,8 @@ describe Query do
       nil,
       filter
     )
-    q.each do |slot|
-      puts slot
-    end
+
+    result = q.first
+    result.should eq slot
   end
 end
