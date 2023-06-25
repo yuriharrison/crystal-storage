@@ -29,13 +29,19 @@ struct TestTable
     @store[slot.address] = slot
   end
 
+  def scan
+    @store.each_value do |slot|
+      yield slot
+    end
+  end
+
   def indexer(column : Column, range=false)
     return nil if @indices.nil?
 
-    @indices.not_nil!.find { |indexer|
+    @indices.not_nil!.find do |indexer|
       indexer.columns.any?(&.==(column)) &&
       (!range || indexer.range?)
-    }
+    end
   end
 end
 
@@ -61,22 +67,25 @@ describe Query do
   slot = PageManagement::Slot.from schema, *test_values
   table.insert slot
 
-  it "test" do
+  it "full scan" do
+    q = Query.new(table, Slice[col_id, col_name, col_score, col_active])
+
+    result = q.first
+    result.should eq slot
+  end
+
+  it "index scan" do
     c1 = Constant.new(1)
     c2 = Attribute.new col_id
-    filter = And.new c1, c2
-    pp! filter.eval slot
-    pp! filter.to_s
-    filter.each { |expr| puts expr }
-    filter.leafs { |expr| puts expr }
+
     q = Query.new(
       table,
       Slice[col_id, col_name, col_score, col_active],
-      nil,
-      filter
+      filters:And.new c1, c2
     )
 
     result = q.first
     result.should eq slot
   end
+
 end

@@ -1,5 +1,13 @@
 module CryStorage
   annotation RefClass; end
+
+  module Table
+    abstract def schema
+    abstract def get(address : Address) : PageManagement::ISlot
+    abstract def insert(slot : ISlot)
+    abstract def scan(& : ISlot ->)
+    abstract def indexer(column : Column, range=false)
+  end
     
   struct DataType(T)
     alias All = Bool | UInt8 | Int16 | Int32 | Int64 | Int128 | String
@@ -64,8 +72,9 @@ module CryStorage
     @bools_count : Int32?
     getter columns : Slice(Column)
 
-    def initialize(@schema, @name, @columns)
+    def initialize(@schema, @name, @columns, original=false)
       validate
+      return if original
       @columns.sort! &.order
       @columns.each { |col| col.table = self }
     end
@@ -97,6 +106,7 @@ module CryStorage
     end
   end
 
+
   struct Column
     enum Key
       PrimaryKey
@@ -122,29 +132,98 @@ module CryStorage
     end
 
     def bool?
-      data_type == DataType::Boolean
+      @data_type == DataType::Boolean
+    end
+
+    def to_s(io)
+      io << '`'
+      io << @table.not_nil!.name unless @table.nil?
+      io << '.' << @name << '`'
     end
   end
 
-  # struct Cell(T)
-  #   property value : T
+  class TableMeta
+    getter id : Index
+    setter space_left : Int32
 
-  #   def initialize(@value : T)
-  #   end
+    def initialize(@id, @space_left)
+    end
 
-  #   def self.from_io(io, type) : Cell
-  #     Cell.new io.read_bytes type
-  #   end
+    def fits?(slot : ISlot)
+      !full?(slot.byte_size)
+    end
 
-  #   def to_io(io, format)
-  #     io.write_bytes @value
-  #   end
+    def full?(size)
+      @space_left < size
+    end
+  end
 
-  #   # FORWARD OPERATORS
-  #   {% begin %}
-  #     {% for operator in %w(== != <=> + - * / % ^ & | << >> ~) %}
-  #       def {{operator.id}}(other); value {{operator.id}} other.value; end
-  #     {% end %}
-  #   {% end %}
-  # end
+  class RowTable
+    include Table
+    # TODO implement; diff tmp table from actual table
+    # TODO implement; implement serialization
+    getter schema : TableSchema
+    @indices : Array(Indexers::Indexer)?
+    @pages : Array(TableMeta)
+    @pageManager : PageManagement::IManager
+
+    def initialize(@schema, @pageManager = PageManagement::MemoryManager.default)
+      initialize(@schema, @pageManager, nil)
+    end
+
+    def initialize(@schema, @pageManager, @indices)
+      # TODO make this a heap
+      @pages = Array(TableMeta).new
+    end
+
+    def self.from(left_table, right_table)
+      from "join", "00001", left_table.schema.columns + right_table.schema.columns
+    end
+
+    def self.from(schema, name, columns)
+      new TableSchema.new(schema, name, columns)
+    end
+
+    def get(address : Address) : PageManagement::ISlot
+      raise "not implemented"
+    end
+
+    def scan
+      @pages.each do |meta|
+        @pageManager.table_page(meta.id, schema).each do |slot|
+          yield slot
+        end
+      end
+    end
+
+    def insert(slot)
+      page = next_page(slot) || new_page
+      page.push slot
+      # TODO update page heap meta
+    end
+
+    def insert(left_slot, right_slot)
+      insert Slot.new(schema, left_slot.values + right_slot.values)
+    end
+
+    def indexer(column : Column, range=false)
+      return nil if @indices.nil?
+
+      @indices.not_nil!.find { |indexer|
+        indexer.columns.any?(&.==(column)) &&
+        (!range || indexer.range?)
+      }
+    end
+
+    protected def next_page(slot : ISlot)
+      meta = @pages.find &.fits? slot
+      return nil unless meta
+      @pageManager.table_page meta.id, schema
+    end
+
+    protected def new_page
+      @pageManager.new_table_page schema
+    end
+  end
+
 end

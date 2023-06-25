@@ -27,6 +27,10 @@ class TestSlot < ISlot
   def indexer : IPage
     page!
   end
+
+  def values : Slice(DataType::All)
+    Slice(Int64).new(0).unsafe_as(Slice(DataType::All))
+  end
   
   def id=(value : Index)
     @id = value
@@ -34,6 +38,10 @@ class TestSlot < ISlot
   
   def id : Index
     id!
+  end
+
+  def get(column)
+    raise "not implemented"
   end
 
   def randomize

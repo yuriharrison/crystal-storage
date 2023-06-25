@@ -18,6 +18,8 @@ module CryStorage::PageManagement
     abstract def delete
     abstract def deleted?
     abstract def indexer : IPage
+    abstract def get(column)
+    abstract def values : Slice(DataType::All)
 
     def address : Address
       { indexer.id, id }
@@ -33,18 +35,25 @@ module CryStorage::PageManagement
     property id : Int32? = nil
     not_nil id
 
+    getter values : Slice(DataType::All)
     @table : TableSchema
-    @values : Slice(DataType::All)
     @nulls : BitArray
     @bools : BitArray
       
     def initialize(@table, io : IO::Memory)
       @status = io.read_bytes SlotStatus
+      # TODO correctly implement this
       @nulls = io.read_bytes BitArray
       @bools = io.read_bytes BitArray
       @values = Slice.new @table.columns.size do |i|
         io.read_bytes @table.columns[i].data_type.ref_class
       end
+    end
+
+    def initialize(@table, @values, @status = SlotStatus::Idle)
+      # TODO figure out nulls and bools
+      @nulls = BitArray.new 1
+      @bools = BitArray.new 1
     end
 
     def initialize(@page : IPage, @id : Index, io : IO::Memory)
@@ -71,8 +80,8 @@ module CryStorage::PageManagement
       @values[column_index(column)] = value
     end
     
-    def get(column_name)
-      get @table.column column_name
+    def get(column)
+      get @table.column column
     end
     
     def get(column : Column)
@@ -94,7 +103,7 @@ module CryStorage::PageManagement
     def deleted?
       @status.deleted?
     end
-    
+
     def byte_size
       # TODO: implement, add #byte_size to all serializable objects
       200

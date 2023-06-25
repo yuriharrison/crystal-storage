@@ -5,6 +5,26 @@ require "./table"
 module CryStorage::SQL
   module ExprValue
     abstract def eval(slot)
+
+    def unsafe_as_constant
+      unsafe_as Constant
+    end
+
+    def unsafe_as_attribute
+      unsafe_as Attribute
+    end
+
+    def bool_expr?
+      is_a? BoolExpr
+    end
+
+    def constant?
+      is_a? Constant
+    end
+
+    def attribute?
+      is_a? Attribute
+    end
   end
 
   alias Numeric = Int128 | Int16 | Int32 | Int64 | UInt8 | UInt16 | UInt32 | UInt64
@@ -69,14 +89,34 @@ module CryStorage::SQL
       arr
     end
 
+    def join_leafs
+      each { |expr| yield expr if expr.join_leaf? }
+    end
+
+    def join_leafs
+      arr = Array(BoolExpr).new
+      join_leafs { |expr| arr << expr }
+      arr
+    end
+
     def leaf?
-      !(left.is_a?(BoolExpr) || left.is_a?(BoolExpr))
+      !(left.bool_expr? || right.bool_expr?)
+    end
+
+    def join_leaf?
+      left.attribute? && right.attribute?
+    end
+
+    def table_leaf?
+      typeof(left) != typeof(right) && (left.attribute? || right.attribute?)
     end
 
     def constant : Constant
       case
-      when left.is_a? Constant; left.unsafe_as(Constant)
-      when right.is_a? Constant; right.unsafe_as(Constant)
+      when left.constant?
+        left.unsafe_as_constant
+      when right.constant?
+        right.unsafe_as_constant
       else raise "No constant on expr #{self}"
       end
     end
@@ -168,6 +208,8 @@ module CryStorage::SQL
   class Attribute
     include ExprValue
 
+    getter column : Column
+
     def initialize(@column : Column)
     end
 
@@ -181,6 +223,10 @@ module CryStorage::SQL
 
     def eval(slot)
       slot.get @column
+    end
+
+    def to_s(io)
+      @column.to_s(io)
     end
   end
 
@@ -207,64 +253,6 @@ end
 module CryStorage::Query
   include Indexers
 
-  module Table
-    abstract def schema
-    abstract def get(address : Address) : ISlot
-    abstract def insert(slot : ISlot)
-    abstract def indexer(column : Column, range=false)
-  end
-
-  struct PersistentTable
-    include Table
-    # TODO implement; diff tmp table from actual table
-    getter schema : TableSchema
-    @indices : Array(Indexer)?
-    @pageManager : PageManagement::IManager
-
-    def initialize(@schema, @pageManager)
-      initialize(@schema, @pageManager, nil)
-    end
-
-    def initialize(@schema, @pageManager, @indices)
-    end
-
-    def get(address : Address) : ISlot
-      raise "not implemented"
-    end
-
-    def insert(slot)
-      raise "not implemented"
-    end
-
-    def indexer(column : Column, range=false)
-      return nil if @indices.nil?
-
-      @indices.not_nil!.find { |indexer|
-        indexer.columns.any?(&.==(column)) &&
-        (!range || indexer.range?)
-      }
-    end
-  end
-
-  struct JoinTable
-    include Table
-    getter schema : TableSchema
-    @pageManager : PageManagement::IManager
-
-    def initialize(@schema, @pageManager)
-      initialize(@schema, @pageManager, nil)
-    end
-
-    def get(address : Address) : ISlot
-      raise "not implemented"
-    end
-
-    def insert(slot)
-      raise "not implemented"
-    end
-
-    def indexer(column : Column, range=false); end
-  end
 
   struct JoinExpr
     property left : Table?
@@ -273,6 +261,18 @@ module CryStorage::Query
     getter type = Type::Inner
 
     def initialize(@right, @condition)
+    end
+
+    def first_condition
+      @condition.join_leafs.first
+    end
+
+    def left_column
+      first_condition.left.unsafe_as_attribute.column
+    end
+
+    def right_column
+      first_condition.right.unsafe_as_attribute.column
     end
 
     enum Type
@@ -288,10 +288,10 @@ module CryStorage::Query
 
     @fields : Slice(Column)
     @joinExprs : Slice(JoinExpr)?
-    @filters : SQL::BoolExpr
+    @filters : SQL::BoolExpr?
     @table : Table
 
-    def initialize(@table, @fields, @joinExprs, @filters)
+    def initialize(@table, @fields, @joinExprs = nil, @filters = nil)
     end
     
     def each
@@ -301,37 +301,40 @@ module CryStorage::Query
           yield slot
         end
       else
-        # join @joinExprs do |slot|
-        #   yield slot
-        # end
+        join @joinExprs.not_nil! do |slot|
+          yield slot
+        end
       end
     end
     
-    # def join(joinExprs)
-    #   join_table = nil
-    #   joins.each do |expr|
-    #     expr.left = join_table unless join_table.nil?
-    #     fields = @fields # should be columns of left and right combined
-    #     schema = TableSchema.new "tmp_join", "00001", columns
-    #     # TODO add expr.right.columns to join_table
-    #     join_table = JoinTable.new schema, PageManagement::MemoryManager.default
-    #     join expr do |slot|
-    #       join_table.insert slot
-    #     end
-    #   end
-    # end
+    def join(joinExprs : Slice(JoinExpr))
+      join_table = nil
+      joinExprs.each do |expr|
+        expr.left = join_table unless join_table.nil?
+        join_table = RowTable.from expr.left.not_nil!, expr.right.not_nil!
+        join expr do |left_slot, right_slot|
+          join_table.insert left_slot, right_slot
+        end
+      end
 
-    def join(expr : JoinExpr)
-      indexer = MemoryHash(Int32).new expr.condition.leafs.first
-      scan(expr.left) do |slot|
-        key = slot.get expr.left_column
+      join_table.not_nil!.scan do |slot|
+        yield slot
+      end
+    end
+
+    def join(expr : JoinExpr, &)
+      # TODO replace ISlot hash table 
+      indexer = Hash(Int32, ISlot).new
+      scan(expr.left.not_nil!) do |slot|
+        key = slot.get(expr.left_column)
         indexer[key] = slot
       end
+
       scan(expr.right) do |right_slot|
         key = right_slot.get expr.right_column
         left_slot = indexer[key]?
         next unless left_slot
-        yield left_slot + right_slot
+        yield left_slot, right_slot
       end
     end
 
@@ -340,28 +343,28 @@ module CryStorage::Query
       # TODO: OPTIMIZE: allow multi-index match
       expr : SQL::BoolExpr? = nil
       column = table.schema.columns.find do |column|
-        expr = @filters.leafs.find do |expr|
+        expr = @filters.not_nil!.leafs.find do |expr|
           (expr.left.is_a? Attribute && expr.left == column) ||
           (expr.right.is_a? Attribute && expr.right == column)
         end
-      end
+      end unless @filters.nil?
 
-      # TODO IMPLEVE READABELETY
-      range = expr.is_a?(SQL::RangeExpr)
-      unless column.nil? || expr.nil?
-        indexer = table.indexer column, range
-        if indexer && !range
-          # TODO group address by page before retrieving
-          indexer.scan(expr.constant.eval) do |address|
-            yield table.get address
-          end
-        elsif
-          raise "not implemented range scan"
-        else
-          raise "not implemented full scan"
+      indexer = table.indexer column, expr.is_a? RangeExpr unless column.nil? || expr.nil?
+      
+      case indexer
+      when .nil?
+        table.scan do |slot|
+          yield slot
         end
+      when .range?
+        raise "range scan not implemented"
+        # indexer.scan Range.new do |address|
+        #   yield table.get address
+        # end
       else
-        raise "not implemented full scan"
+        indexer.scan(expr.not_nil!.constant.eval) do |address|
+          yield table.get address
+        end
       end
     end
 

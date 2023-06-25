@@ -53,11 +53,13 @@ module CryStorage::PageManagement
     @body : IO::Memory
     property table : TableSchema
 
+    # TODO refactor to
+    # def initialize(@id : Index, @table : TableSchema, @manager : IManager = MemoryManager.default)
     def initialize(@manager : IManager, @id : Index, @table : TableSchema, @buffer : IO::Memory)
       @header = PageHeader.new buffer
       @body = buffer.slice
     end
-
+    
     def to_io(io, format)
       io.write_bytes @header
       io.copy_from @body
@@ -74,7 +76,6 @@ module CryStorage::PageManagement
     def size
       @header.size
     end
-    page.each do |slot|
   
     def each
       each_index do |index|
@@ -83,7 +84,6 @@ module CryStorage::PageManagement
       end
     end
 
-    
     def unsafe_fetch(index : Int) : ISlot
       offset, content_size = slot_link index
       T.new self, index, @body[offset, content_size]
@@ -172,6 +172,21 @@ module CryStorage::PageManagement
     end
   end
 
+  abstract class IManager
+    include Indexable::Mutable(IO::Memory)
+
+    abstract def new_page : Tuple(Index, IO::Memory)
+
+    def new_table_page(schema, cls = Page(Slot))
+      id, io = new_page
+      cls.new(self, id, schema, io)
+    end
+
+    def table_page(id, schema, cls = Page(Slot))
+      cls.new(self, id, schema, unsafe_fetch(id))
+    end
+  end
+
   class MemoryManager < IManager
     MIN_SIZE = 4
     PAGE_SIZE = 1024
@@ -207,6 +222,10 @@ module CryStorage::PageManagement
 
     def []=(index : Int, page : IPage)
       unsafe_fetch(index).write_bytes page
+    end
+
+    def new_page : Tuple(Index, IO::Memory)
+      raise "not implemented"
     end
   end
 end

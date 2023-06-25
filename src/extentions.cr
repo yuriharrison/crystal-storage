@@ -69,7 +69,7 @@ class IO::Memory
 end
 
 module Indexable::Item(T)
-  abstract def id : Index
+  abstract def id : CryStorage::Index
   abstract def indexer
 
   def flush
