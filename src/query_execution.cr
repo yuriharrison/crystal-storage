@@ -260,7 +260,7 @@ module CryStorage::Query
     getter condition : SQL::BoolExpr
     getter type = Type::Inner
 
-    def initialize(@right, @condition)
+    def initialize(@left, @right, @condition)
     end
 
     def first_condition

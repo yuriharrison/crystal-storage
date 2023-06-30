@@ -19,6 +19,7 @@ module CryStorage::PageManagement
     
     abstract def id
     abstract def table
+    abstract def space_left
   end
   
   struct PageHeader
@@ -80,7 +81,8 @@ module CryStorage::PageManagement
     def each
       each_index do |index|
         slot = unsafe_fetch(index)
-        yield slot unless slot.deleted?
+        next if slot.deleted?
+        yield slot
       end
     end
 
@@ -140,7 +142,7 @@ module CryStorage::PageManagement
       @header.to_s
     end
 
-    private def space_left
+    def space_left
       # BODY[ ...next_slot_link <SPACE_LEFT> next_slot_offset... ]
       next_offset(0) - size*SLOT_LINK_SIZE
     end
@@ -188,12 +190,13 @@ module CryStorage::PageManagement
   end
 
   class MemoryManager < IManager
-    MIN_SIZE = 4
+    MAX_SIZE = 20
     PAGE_SIZE = 1024
     @@default : MemoryManager?
     
     def initialize
-      @buffer = IO::Memory.new Slice.new PAGE_SIZE*MIN_SIZE, UInt8::MIN
+      @size = 0
+      @buffer = IO::Memory.new Slice.new PAGE_SIZE*MAX_SIZE, UInt8::MIN
     end
 
     def self.default
@@ -201,7 +204,8 @@ module CryStorage::PageManagement
     end
 
     def size : Int
-      (@buffer.size / PAGE_SIZE).to_i64
+      # (@buffer.size / PAGE_SIZE).to_i64
+      @size
     end
 
     def unsafe_fetch(index : Int) : IO::Memory
@@ -225,7 +229,12 @@ module CryStorage::PageManagement
     end
 
     def new_page : Tuple(Index, IO::Memory)
-      raise "not implemented"
+      index = new_index
+      return index, unsafe_fetch index
+    end
+
+    protected def new_index
+      @size.tap { @size += 1 }
     end
   end
 end

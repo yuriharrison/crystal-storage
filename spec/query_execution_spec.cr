@@ -55,8 +55,8 @@ describe Query do
   schema = TableSchema.new "test_schema", "test_table", columns
   
   page_manager = PageManagement::MemoryManager.default
-  page_id = 0
-  page = PageManagement::Page(PageManagement::Slot).new page_manager, page_id, schema, page_manager[page_id]
+  page_id, io = page_manager.new_page
+  page = PageManagement::Page(PageManagement::Slot).new page_manager, page_id, schema, io
   
   index_id = Indexers::MemoryHash(Int32).new col_id
   index_name = Indexers::MemoryHash(String).new col_name
@@ -78,7 +78,7 @@ describe Query do
     c1 = Constant.new(1)
     c2 = Attribute.new col_id
 
-    q = Query.new(
+    q = Query.new
       table,
       Slice[col_id, col_name, col_score, col_active],
       filters:And.new c1, c2
@@ -86,6 +86,38 @@ describe Query do
 
     result = q.first
     result.should eq slot
+  end
+
+  it "single join" do
+    c1 = Attribute.new col_id
+    c2 = Attribute.new col_id
+    join = JoinExpr.new table, table, And.new(c1, c2)
+
+    q = Query.new(
+      table,
+      Slice[col_id, col_name, col_score, col_active],
+      joinExprs: Slice[join]
+      )
+    
+    q.first.values.zip({ *test_values, *test_values }).each do |value, expected|
+      value.should eq expected
+    end
+  end
+  
+  it "two joins" do
+    c1 = Attribute.new col_id
+    c2 = Attribute.new col_id
+    join = JoinExpr.new table, table, And.new(c1, c2)
+
+    q = Query.new(
+      table,
+      Slice[col_id, col_name, col_score, col_active],
+      joinExprs: Slice[join, join]
+      )
+    
+    q.first.values.zip({ *test_values, *test_values, *test_values }).each do |value, expected|
+      value.should eq expected
+    end
   end
 
 end

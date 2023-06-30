@@ -29,7 +29,7 @@ module CryStorage::PageManagement
   class Slot < ISlot
     # TODO save bools separatly
     
-    property status : SlotStatus = SlotStatus::Idle
+    getter status : SlotStatus = SlotStatus::Idle
     property page : IPage? = nil
     not_nil page
     property id : Int32? = nil
@@ -97,7 +97,7 @@ module CryStorage::PageManagement
     end
     
     def delete
-      @status |= SlotStatus::Deleted
+      @status = SlotStatus::Deleted
     end
     
     def deleted?

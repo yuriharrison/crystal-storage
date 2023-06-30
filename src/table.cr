@@ -144,7 +144,7 @@ module CryStorage
 
   class TableMeta
     getter id : Index
-    setter space_left : Int32
+    setter space_left : Int64
 
     def initialize(@id, @space_left)
     end
@@ -155,6 +155,14 @@ module CryStorage
 
     def full?(size)
       @space_left < size
+    end
+  end
+
+  struct TableRef
+    getter alias : Int32
+    getter table : Table
+
+    def initialize(@alias, @table)
     end
   end
 
@@ -197,13 +205,16 @@ module CryStorage
     end
 
     def insert(slot)
-      page = next_page(slot) || new_page
+      page = next_page(slot)
       page.push slot
+      page.flush
       # TODO update page heap meta
+      # TODO insert into indexes
     end
 
     def insert(left_slot, right_slot)
-      insert Slot.new(schema, left_slot.values + right_slot.values)
+      slot = Slot.new(schema, left_slot.values + right_slot.values)
+      insert slot
     end
 
     def indexer(column : Column, range=false)
@@ -216,8 +227,11 @@ module CryStorage
     end
 
     protected def next_page(slot : ISlot)
-      meta = @pages.find &.fits? slot
-      return nil unless meta
+      until meta = @pages.find &.fits?(slot)
+        page = new_page
+        @pages << TableMeta.new page.id, page.space_left
+      end
+
       @pageManager.table_page meta.id, schema
     end
 

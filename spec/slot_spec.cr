@@ -16,6 +16,10 @@ class TestPage < IPage
       1
     end
 
+    def space_left
+      1024
+    end
+
     def push(slot : ISlot)
     end
 
