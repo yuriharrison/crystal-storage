@@ -14,10 +14,6 @@ end
 
 module CryStorage::Indexers
   # TODO Directory class maps table X pages
-  # TODO IMPLEMENT SCAN CLASS
-  # TODO IMPLEMENT BASIC SELECT WITH SCAN AND INDEX BASED ON WHERE CLAUSE
-  # TODO IMPLEMENT JOIN ALGORITHM USING HASH MEMORY
-  # TODO IMPLEMENT IMPLEMENT 
 
   module Indexer
     abstract def columns : Slice(Column)

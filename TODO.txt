@@ -1,0 +1,24 @@
+# B+Tree multi column
+# HashTable for Index columns and Slots
+# QueryLexer
+  1. study SQL lexer
+# Query execution optimization
+  0. watch lecture
+  1. must filter fields on table scan
+  2. must run all conditions during join
+  3. lecture improvements, expects:
+    1. order conditions by index (ranged last)
+    2. scan filter order eq, range, not eq
+# Sorting
+# Aggregations
+# Multi Threading
+
+
+Unordered
+# CLI client
+  1. repl
+# Log
+# Page Directory
+# Startup
+  1. log recovery
+# Driver
