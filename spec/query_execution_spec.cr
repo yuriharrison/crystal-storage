@@ -78,7 +78,7 @@ describe Query do
     c1 = Constant.new(1)
     c2 = Attribute.new col_id
 
-    q = Query.new
+    q = Query.new(
       table,
       Slice[col_id, col_name, col_score, col_active],
       filters:And.new c1, c2
